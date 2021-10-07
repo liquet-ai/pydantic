@@ -1,7 +1,17 @@
 from configparser import ConfigParser
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type as TypingType, Union
 
-import toml
+try:
+    import toml
+except ImportError:  # pragma: no cover
+    # future-proofing for upcoming `mypy` releases which will switch dependencies
+    try:
+        import tomli as toml  # type: ignore
+    except ImportError:
+        import warnings
+
+        warnings.warn('No TOML parser installed, cannot read configuration from `pyproject.toml`.')
+        toml = None  # type: ignore
 from mypy.errorcodes import ErrorCode
 from mypy.nodes import (
     ARG_NAMED,
@@ -112,7 +122,7 @@ class PydanticPluginConfig:
         if options.config_file is None:  # pragma: no cover
             return
 
-        if options.config_file.endswith('.toml'):
+        if toml and options.config_file.endswith('.toml'):
             with open(options.config_file, 'r') as rf:
                 config = toml.load(rf).get('tool', {}).get('pydantic-mypy', {})
             for key in self.__slots__:
@@ -630,7 +640,7 @@ def add_method(
     #     first = []
     else:
         self_type = self_type or fill_typevars(info)
-        first = [Argument(Var('self'), self_type, None, ARG_POS)]
+        first = [Argument(Var('__pydantic_self__'), self_type, None, ARG_POS)]
     args = first + args
     arg_types, arg_names, arg_kinds = [], [], []
     for arg in args:
