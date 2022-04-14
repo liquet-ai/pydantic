@@ -593,7 +593,7 @@ def model_process_schema(
 
         m_schema = ma_schema
         if ma_schema != mf_schema:
-            m_schema = {'anyOf': [mf_schema, ma_schema]}
+            m_schema = mf_schema
 
         m_definitions = ma_definitions
         for key in mf_definitions:
