@@ -5,7 +5,7 @@ black = black -S -l 120 --target-version py38 pydantic tests
 .PHONY: install-linting
 install-linting:
 	pip install -r tests/requirements-linting.txt
-	mypy --install-types
+	pre-commit install
 
 .PHONY: install-pydantic
 install-pydantic:
@@ -20,10 +20,6 @@ install-testing: install-pydantic
 .PHONY: install-docs
 install-docs: install-pydantic
 	pip install -U -r docs/requirements.txt
-
-.PHONY: install-benchmarks
-install-benchmarks: install-pydantic
-	pip install -U -r benchmarks/requirements.txt
 
 .PHONY: install
 install: install-testing install-linting install-docs
@@ -85,24 +81,12 @@ test-fastapi:
 .PHONY: all
 all: lint mypy testcov
 
-.PHONY: benchmark-all
-benchmark-all:
-	python benchmarks/run.py
-
-.PHONY: benchmark-pydantic
-benchmark-pydantic:
-	python benchmarks/run.py pydantic-only
-
-.PHONY: benchmark-json
-benchmark-json:
-	TEST_JSON=1 python benchmarks/run.py
-
 .PHONY: clean
 clean:
 	rm -rf `find . -name __pycache__`
-	rm -f `find . -type f -name '*.py[co]' `
-	rm -f `find . -type f -name '*~' `
-	rm -f `find . -type f -name '.*~' `
+	rm -f `find . -type f -name '*.py[co]'`
+	rm -f `find . -type f -name '*~'`
+	rm -f `find . -type f -name '.*~'`
 	rm -rf .cache
 	rm -rf .pytest_cache
 	rm -rf .mypy_cache
@@ -118,7 +102,6 @@ clean:
 	rm -rf docs/_build
 	rm -rf docs/.changelog.md docs/.version.md docs/.tmp_schema_mappings.html
 	rm -rf fastapi/test.db
-	rm -rf codecov.sh
 	rm -rf coverage.xml
 
 .PHONY: docs
