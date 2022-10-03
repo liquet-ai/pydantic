@@ -2,12 +2,16 @@ import pytest
 
 from pydantic import (
     AmqpDsn,
+    AnyHttpUrl,
     AnyUrl,
     BaseModel,
+    CockroachDsn,
+    EmailError,
     EmailStr,
     FileUrl,
     HttpUrl,
     KafkaDsn,
+    MongoDsn,
     NameEmail,
     PostgresDsn,
     RedisDsn,
@@ -369,7 +373,7 @@ def test_parses_tld(input, output):
 
 @pytest.mark.parametrize(
     'value',
-    ['file:///foo/bar', 'file://localhost/foo/bar' 'file:////localhost/foo/bar'],
+    ['file:///foo/bar', 'file://localhost/foo/bar', 'file:////localhost/foo/bar'],
 )
 def test_file_url_success(value):
     class Model(BaseModel):
@@ -417,15 +421,106 @@ def test_http_urls_default_port(url, port):
     assert m.v == url
 
 
-def test_postgres_dsns():
+@pytest.mark.parametrize(
+    'dsn',
+    [
+        'postgres://user:pass@localhost:5432/app',
+        'postgresql://user:pass@localhost:5432/app',
+        'postgresql+asyncpg://user:pass@localhost:5432/app',
+        'postgres://user:pass@host1.db.net,host2.db.net:6432/app',
+    ],
+)
+def test_postgres_dsns(dsn):
     class Model(BaseModel):
         a: PostgresDsn
 
-    assert Model(a='postgres://user:pass@localhost:5432/app').a == 'postgres://user:pass@localhost:5432/app'
-    assert Model(a='postgresql://user:pass@localhost:5432/app').a == 'postgresql://user:pass@localhost:5432/app'
+    assert Model(a=dsn).a == dsn
+
+
+@pytest.mark.parametrize(
+    'dsn,error_message',
+    (
+        (
+            'postgres://user:pass@host1.db.net:4321,/foo/bar:5432/app',
+            {'loc': ('a',), 'msg': 'URL host invalid', 'type': 'value_error.url.host'},
+        ),
+        (
+            'postgres://user:pass@host1.db.net,/app',
+            {'loc': ('a',), 'msg': 'URL host invalid', 'type': 'value_error.url.host'},
+        ),
+        (
+            'postgres://user:pass@/foo/bar:5432,host1.db.net:4321/app',
+            {'loc': ('a',), 'msg': 'URL host invalid', 'type': 'value_error.url.host'},
+        ),
+        (
+            'postgres://localhost:5432/app',
+            {'loc': ('a',), 'msg': 'userinfo required in URL but missing', 'type': 'value_error.url.userinfo'},
+        ),
+        (
+            'postgres://user@/foo/bar:5432/app',
+            {'loc': ('a',), 'msg': 'URL host invalid', 'type': 'value_error.url.host'},
+        ),
+        (
+            'http://example.org',
+            {
+                'loc': ('a',),
+                'msg': 'URL scheme not permitted',
+                'type': 'value_error.url.scheme',
+                'ctx': {'allowed_schemes': PostgresDsn.allowed_schemes},
+            },
+        ),
+    ),
+)
+def test_postgres_dsns_validation_error(dsn, error_message):
+    class Model(BaseModel):
+        a: PostgresDsn
+
+    with pytest.raises(ValidationError) as exc_info:
+        Model(a=dsn)
+    error = exc_info.value.errors()[0]
+    assert error == error_message
+
+
+def test_multihost_postgres_dsns():
+    class Model(BaseModel):
+        a: PostgresDsn
+
+    any_multihost_url = Model(a='postgres://user:pass@host1.db.net:4321,host2.db.net:6432/app').a
+    assert any_multihost_url == 'postgres://user:pass@host1.db.net:4321,host2.db.net:6432/app'
+    assert any_multihost_url.scheme == 'postgres'
+    assert any_multihost_url.host is None
+    assert any_multihost_url.host_type is None
+    assert any_multihost_url.tld is None
+    assert any_multihost_url.port is None
+    assert any_multihost_url.path == '/app'
+    assert any_multihost_url.hosts == [
+        {'host': 'host1.db.net', 'port': '4321', 'tld': 'net', 'host_type': 'domain', 'rebuild': False},
+        {'host': 'host2.db.net', 'port': '6432', 'tld': 'net', 'host_type': 'domain', 'rebuild': False},
+    ]
+
+    any_multihost_url = Model(a='postgres://user:pass@host.db.net:4321/app').a
+    assert any_multihost_url.scheme == 'postgres'
+    assert any_multihost_url == 'postgres://user:pass@host.db.net:4321/app'
+    assert any_multihost_url.host == 'host.db.net'
+    assert any_multihost_url.host_type == 'domain'
+    assert any_multihost_url.tld == 'net'
+    assert any_multihost_url.port == '4321'
+    assert any_multihost_url.path == '/app'
+    assert any_multihost_url.hosts is None
+
+
+def test_cockroach_dsns():
+    class Model(BaseModel):
+        a: CockroachDsn
+
+    assert Model(a='cockroachdb://user:pass@localhost:5432/app').a == 'cockroachdb://user:pass@localhost:5432/app'
     assert (
-        Model(a='postgresql+asyncpg://user:pass@localhost:5432/app').a
-        == 'postgresql+asyncpg://user:pass@localhost:5432/app'
+        Model(a='cockroachdb+psycopg2://user:pass@localhost:5432/app').a
+        == 'cockroachdb+psycopg2://user:pass@localhost:5432/app'
+    )
+    assert (
+        Model(a='cockroachdb+asyncpg://user:pass@localhost:5432/app').a
+        == 'cockroachdb+asyncpg://user:pass@localhost:5432/app'
     )
 
     with pytest.raises(ValidationError) as exc_info:
@@ -434,12 +529,12 @@ def test_postgres_dsns():
     assert exc_info.value.json().startswith('[')
 
     with pytest.raises(ValidationError) as exc_info:
-        Model(a='postgres://localhost:5432/app')
+        Model(a='cockroachdb://localhost:5432/app')
     error = exc_info.value.errors()[0]
     assert error == {'loc': ('a',), 'msg': 'userinfo required in URL but missing', 'type': 'value_error.url.userinfo'}
 
     with pytest.raises(ValidationError) as exc_info:
-        Model(a='postgres://user@/foo/bar:5432/app')
+        Model(a='cockroachdb://user@/foo/bar:5432/app')
     error = exc_info.value.errors()[0]
     assert error == {'loc': ('a',), 'msg': 'URL host invalid', 'type': 'value_error.url.host'}
 
@@ -509,6 +604,33 @@ def test_redis_dsns():
     assert m.a.path == '/0'
 
 
+def test_mongodb_dsns():
+    class Model(BaseModel):
+        a: MongoDsn
+
+    # TODO: Need to unit tests about "Replica Set", "Sharded cluster" and other deployment modes of MongoDB
+    m = Model(a='mongodb://user:pass@localhost:1234/app')
+    assert m.a == 'mongodb://user:pass@localhost:1234/app'
+    assert m.a.user == 'user'
+    assert m.a.password == 'pass'
+
+    with pytest.raises(ValidationError) as exc_info:
+        Model(a='http://example.org')
+    assert exc_info.value.errors()[0]['type'] == 'value_error.url.scheme'
+
+    # Password is not required for MongoDB protocol
+    m = Model(a='mongodb://localhost:1234/app')
+    assert m.a == 'mongodb://localhost:1234/app'
+    assert m.a.user is None
+    assert m.a.password is None
+
+    # Only schema and host is required for MongoDB protocol
+    m = Model(a='mongodb://localhost')
+    assert m.a.scheme == 'mongodb'
+    assert m.a.host == 'localhost'
+    assert m.a.port == '27017'
+
+
 def test_kafka_dsns():
     class Model(BaseModel):
         a: KafkaDsn
@@ -564,6 +686,41 @@ def test_build_url(kwargs, expected):
     assert AnyUrl(None, **kwargs) == expected
 
 
+@pytest.mark.parametrize(
+    'kwargs,expected',
+    [
+        (dict(scheme='http', host='example.net'), 'http://example.net'),
+        (dict(scheme='https', host='example.net'), 'https://example.net'),
+        (dict(scheme='http', user='foo', host='example.net'), 'http://foo@example.net'),
+        (dict(scheme='https', user='foo', host='example.net'), 'https://foo@example.net'),
+        (dict(scheme='http', user='foo', host='example.net', port='123'), 'http://foo@example.net:123'),
+        (dict(scheme='https', user='foo', host='example.net', port='123'), 'https://foo@example.net:123'),
+        (dict(scheme='http', user='foo', password='x', host='example.net'), 'http://foo:x@example.net'),
+        (dict(scheme='http2', user='foo', password='x', host='example.net'), 'http2://foo:x@example.net'),
+        (dict(scheme='http', host='example.net', query='a=b', fragment='c=d'), 'http://example.net?a=b#c=d'),
+        (dict(scheme='http2', host='example.net', query='a=b', fragment='c=d'), 'http2://example.net?a=b#c=d'),
+        (dict(scheme='http', host='example.net', port='1234'), 'http://example.net:1234'),
+        (dict(scheme='https', host='example.net', port='1234'), 'https://example.net:1234'),
+    ],
+)
+@pytest.mark.parametrize('klass', [AnyHttpUrl, HttpUrl])
+def test_build_any_http_url(klass, kwargs, expected):
+    assert klass(None, **kwargs) == expected
+
+
+@pytest.mark.parametrize(
+    'klass, kwargs,expected',
+    [
+        (AnyHttpUrl, dict(scheme='http', user='foo', host='example.net', port='80'), 'http://foo@example.net:80'),
+        (AnyHttpUrl, dict(scheme='https', user='foo', host='example.net', port='443'), 'https://foo@example.net:443'),
+        (HttpUrl, dict(scheme='http', user='foo', host='example.net', port='80'), 'http://foo@example.net'),
+        (HttpUrl, dict(scheme='https', user='foo', host='example.net', port='443'), 'https://foo@example.net'),
+    ],
+)
+def test_build_http_url_port(klass, kwargs, expected):
+    assert klass(None, **kwargs) == expected
+
+
 def test_son():
     class Model(BaseModel):
         v: HttpUrl
@@ -590,6 +747,8 @@ def test_son():
         ('foo.bar@example.com ', 'foo.bar', 'foo.bar@example.com'),
         ('foo BAR <foobar@example.com >', 'foo BAR', 'foobar@example.com'),
         ('FOO bar   <foobar@example.com> ', 'FOO bar', 'foobar@example.com'),
+        (' Whatever <foobar@example.com>', 'Whatever', 'foobar@example.com'),
+        ('Whatever < foobar@example.com>', 'Whatever', 'foobar@example.com'),
         ('<FOOBAR@example.com> ', 'FOOBAR', 'FOOBAR@example.com'),
         ('ñoñó@example.com', 'ñoñó', 'ñoñó@example.com'),
         ('我買@example.com', '我買', '我買@example.com'),
@@ -603,6 +762,11 @@ def test_son():
         ('foo.bar@example.com', 'foo.bar', 'foo.bar@example.com'),
         ('foo.bar@exam-ple.com ', 'foo.bar', 'foo.bar@exam-ple.com'),
         ('ιωάννης@εεττ.gr', 'ιωάννης', 'ιωάννης@εεττ.gr'),
+        ('foobar@аррӏе.com', 'foobar', 'foobar@аррӏе.com'),
+        ('foobar@xn--80ak6aa92e.com', 'foobar', 'foobar@аррӏе.com'),
+        ('аррӏе@example.com', 'аррӏе', 'аррӏе@example.com'),
+        ('xn--80ak6aa92e@example.com', 'xn--80ak6aa92e', 'xn--80ak6aa92e@example.com'),
+        ('葉士豪@臺網中心.tw', '葉士豪', '葉士豪@臺網中心.tw'),
     ],
 )
 def test_address_valid(value, name, email):
@@ -611,31 +775,36 @@ def test_address_valid(value, name, email):
 
 @pytest.mark.skipif(not email_validator, reason='email_validator not installed')
 @pytest.mark.parametrize(
-    'value',
+    'value,reason',
     [
-        'f oo.bar@example.com ',
-        'foo.bar@exam\nple.com ',
-        'foobar',
-        'foobar <foobar@example.com',
-        '@example.com',
-        'foobar@.example.com',
-        'foobar@.com',
-        'foo bar@example.com',
-        'foo@bar@example.com',
-        '\n@example.com',
-        '\r@example.com',
-        '\f@example.com',
-        ' @example.com',
-        '\u0020@example.com',
-        '\u001f@example.com',
-        '"@example.com',
-        '\"@example.com',
-        ',@example.com',
-        'foobar <foobar<@example.com>',
+        ('@example.com', 'There must be something before the @-sign.'),
+        ('f oo.bar@example.com', 'The email address contains invalid characters before the @-sign'),
+        ('foobar', 'The email address is not valid. It must have exactly one @-sign.'),
+        ('foobar@localhost', 'The domain name localhost is not valid. It should have a period.'),
+        ('foobar@127.0.0.1', 'The domain name 127.0.0.1 is not valid. It is not within a valid top-level domain.'),
+        ('foo.bar@exam\nple.com ', None),
+        ('foobar <foobar@example.com', None),
+        ('foobar@.example.com', None),
+        ('foobar@.com', None),
+        ('foo bar@example.com', None),
+        ('foo@bar@example.com', None),
+        ('\n@example.com', None),
+        ('\r@example.com', None),
+        ('\f@example.com', None),
+        (' @example.com', None),
+        ('\u0020@example.com', None),
+        ('\u001f@example.com', None),
+        ('"@example.com', None),
+        ('\"@example.com', None),
+        (',@example.com', None),
+        ('foobar <foobar<@example.com>', None),
+        ('foobar <foobar@example.com>>', None),
+        ('foobar <<foobar<@example.com>', None),
+        ('foobar <>', None),
     ],
 )
-def test_address_invalid(value):
-    with pytest.raises(ValueError):
+def test_address_invalid(value, reason):
+    with pytest.raises(EmailError, match=f'value is not a valid email address: {reason or ""}'):
         validate_email(value)
 
 

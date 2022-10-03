@@ -1,14 +1,164 @@
+## v1.10.2 (2022-09-05)
+
+* **Revert Change:** Revert percent encoding of URL parts which was originally added in #4224, #4470 by @samuelcolvin
+* Prevent long (length > `4_300`) strings/bytes as input to int fields, see
+  [python/cpython#95778](https://github.com/python/cpython/issues/95778) and
+  [CVE-2020-10735](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2020-10735), #1477 by @samuelcolvin
+* fix: dataclass wrapper was not always called, #4477 by @PrettyWood
+* Use `tomllib` on Python 3.11 when parsing `mypy` configuration, #4476 by @hauntsaninja
+* Basic fix of `GenericModel` cache to detect order of arguments in `Union` models, #4474 by @sveinugu
+* Fix mypy plugin when using bare types like `list` and `dict` as `default_factory`, #4457 by @samuelcolvin
+
+## v1.10.1 (2022-08-31)
+
+* Add `__hash__` method to `pydancic.color.Color` class, #4454 by @czaki
+
+## v1.10.0 (2022-08-30)
+
+* Refactor the whole _pydantic_ `dataclass` decorator to really act like its standard lib equivalent.
+  It hence keeps `__eq__`, `__hash__`, ... and makes comparison with its non-validated version possible.
+  It also fixes usage of `frozen` dataclasses in fields and usage of `default_factory` in nested dataclasses.
+  The support of `Config.extra` has been added.
+  Finally, config customization directly via a `dict` is now possible, #2557 by @PrettyWood
+  <br/><br/>
+  **BREAKING CHANGES:**
+  - The `compiled` boolean (whether _pydantic_ is compiled with cython) has been moved from `main.py` to `version.py`
+  - Now that `Config.extra` is supported, `dataclass` ignores by default extra arguments (like `BaseModel`)
+* Fix PEP487 `__set_name__` protocol in `BaseModel` for PrivateAttrs, #4407 by @tlambert03
+* Allow for custom parsing of environment variables via `parse_env_var` in `Config`, #4406 by @acmiyaguchi
+* Rename `master` to `main`, #4405 by @hramezani
+* Fix `StrictStr` does not raise `ValidationError` when `max_length` is present in `Field`, #4388 by @hramezani
+* Make `SecretStr` and `SecretBytes` hashable, #4387 by @chbndrhnns
+* Fix `StrictBytes` does not raise `ValidationError` when `max_length` is present in `Field`, #4380 by @JeanArhancet
+* Add support for bare `type`, #4375 by @hramezani
+* Support Python 3.11, including binaries for 3.11 in PyPI, #4374 by @samuelcolvin
+* Add support for `re.Pattern`, #4366 by @hramezani
+* Fix `__post_init_post_parse__` is incorrectly passed keyword arguments when no `__post_init__` is defined, #4361 by @hramezani
+* Fix implicitly importing `ForwardRef` and `Callable` from `pydantic.typing` instead of `typing` and also expose `MappingIntStrAny`, #4358 by @aminalaee
+* remove `Any` types from the `dataclass` decorator so it can be used with the `disallow_any_expr` mypy option, #4356 by @DetachHead
+* moved repo to `pydantic/pydantic`, #4348 by @yezz123
+* fix "extra fields not permitted" error when dataclass with `Extra.forbid` is validated multiple times, #4343 by @detachhead
+* Add Python 3.9 and 3.10 examples to docs, #4339 by @Bobronium
+* Discriminated union models now use `oneOf` instead of `anyOf` when generating OpenAPI schema definitions, #4335 by @MaxwellPayne
+* Allow type checkers to infer inner type of `Json` type. `Json[list[str]]` will be now inferred as `list[str]`,
+  `Json[Any]` should be used instead of plain `Json`.
+  Runtime behaviour is not changed, #4332 by @Bobronium
+* Allow empty string aliases by using a `alias is not None` check, rather than `bool(alias)`, #4253 by @sergeytsaplin
+* Update `ForwardRef`s in `Field.outer_type_`, #4249 by @JacobHayes
+* The use of `__dataclass_transform__` has been replaced by `typing_extensions.dataclass_transform`, which is the preferred way to mark pydantic models as a dataclass under [PEP 681](https://peps.python.org/pep-0681/), #4241 by @multimeric
+* Use parent model's `Config` when validating nested `NamedTuple` fields, #4219 by @synek
+* Update `BaseModel.construct` to work with aliased Fields, #4192 by @kylebamos
+* Catch certain raised errors in `smart_deepcopy` and revert to `deepcopy` if so, #4184 by @coneybeare
+* Add `Config.anystr_upper` and `to_upper` kwarg to constr and conbytes, #4165 by @satheler
+* Fix JSON schema for `set` and `frozenset` when they include default values, #4155 by @aminalaee
+* Teach the mypy plugin that methods decorated by `@validator` are classmethods, #4102 by @DMRobertson
+* Improve mypy plugin's ability to detect required fields, #4086 by @richardxia
+* Support fields of type `Type[]` in schema, #4051 by @aminalaee
+* Add `default` value in JSON Schema when `const=True`, #4031 by @aminalaee
+* Adds reserved word check to signature generation logic, #4011 by @strue36
+* Fix Json strategy failure for the complex nested field, #4005 by @sergiosim
+* Add JSON-compatible float constraint `allow_inf_nan`, #3994 by @tiangolo
+* Remove undefined behaviour when `env_prefix` had characters in common with `env_nested_delimiter`, #3975 by @arsenron
+* Support generics model with `create_model`, #3945 by @hot123s
+* allow submodels to overwrite extra field info, #3934 by @PrettyWood
+* Document and test structural pattern matching ([PEP 636](https://peps.python.org/pep-0636/)) on `BaseModel`, #3920 by @irgolic
+* Fix incorrect deserialization of python timedelta object to ISO 8601 for negative time deltas.
+  Minus was serialized in incorrect place ("P-1DT23H59M59.888735S" instead of correct "-P1DT23H59M59.888735S"), #3899 by @07pepa
+* Fix validation of discriminated union fields with an alias when passing a model instance, #3846 by @chornsby
+* Add a CockroachDsn type to validate CockroachDB connection strings. The type
+  supports the following schemes: `cockroachdb`, `cockroachdb+psycopg2` and `cockroachdb+asyncpg`, #3839 by @blubber
+* Fix MyPy plugin to not override pre-existing `__init__` method in models, #3824 by @patrick91
+* Fix mypy version checking, #3783 by @KotlinIsland
+* support overwriting dunder attributes of `BaseModel` instances, #3777 by @PrettyWood
+* Added `ConstrainedDate` and `condate`, #3740 by @hottwaj
+* Support `kw_only` in dataclasses, #3670 by @detachhead
+* Add comparison method for `Color` class, #3646 by @aminalaee
+* Drop support for python3.6, associated cleanup, #3605 by @samuelcolvin
+* created new function `to_lower_camel()` for "non pascal case" camel case, #3463 by @schlerp
+* Add checks to `default` and `default_factory` arguments in Mypy plugin, #3430 by @klaa97
+* fix mangling of `inspect.signature` for `BaseModel`, #3413 by @fix-inspect-signature
+* Adds the `SecretField` abstract class so that all the current and future secret fields like `SecretStr` and `SecretBytes` will derive from it, #3409 by @expobrain
+* Support multi hosts validation in `PostgresDsn`, #3337 by @rglsk
+* Fix parsing of very small numeric timedelta values, #3315 by @samuelcolvin
+* Update `SecretsSettingsSource` to respect `config.case_sensitive`, #3273 by @JeanArhancet
+* Add MongoDB network data source name (DSN) schema, #3229 by @snosratiershad
+* Add support for multiple dotenv files, #3222 by @rekyungmin
+* Raise an explicit `ConfigError` when multiple fields are incorrectly set for a single validator, #3215 by @SunsetOrange
+* Allow ellipsis on `Field`s inside `Annotated` for `TypedDicts` required, #3133 by @ezegomez
+* Catch overflow errors in `int_validator`, #3112 by @ojii
+* Adds a `__rich_repr__` method to `Representation` class which enables pretty printing with [Rich](https://github.com/willmcgugan/rich), #3099 by @willmcgugan
+* Add percent encoding in `AnyUrl` and descendent types, #3061 by @FaresAhmedb
+* `validate_arguments` decorator now supports `alias`, #3019 by @MAD-py
+* Avoid `__dict__` and `__weakref__` attributes in `AnyUrl` and IP address fields, #2890 by @nuno-andre
+* Add ability to use `Final` in a field type annotation, #2766 by @uriyyo
+* Update requirement to `typing_extensions>=4.1.0` to guarantee `dataclass_transform` is available, #4424 by @commonism
+* Add Explosion and AWS to main sponsors, #4413 by @samuelcolvin
+* Update documentation for `copy_on_model_validation` to reflect recent changes, #4369 by @samuelcolvin
+* Runtime warning if `__slots__` is passed to `create_model`, `__slots__` is then ignored, #4432 by @samuelcolvin
+* Add type hints to `BaseSettings.Config` to avoid mypy errors, also correct mypy version compatibility notice in docs, #4450 by @samuelcolvin
+
+## v1.10.0b1 (2022-08-24)
+
+Pre-release, see [the GitHub release](https://github.com/pydantic/pydantic/releases/tag/v1.10.0b1) for details.
+
+## v1.10.0a2 (2022-08-24)
+
+Pre-release, see [the GitHub release](https://github.com/pydantic/pydantic/releases/tag/v1.10.0a2) for details.
+
+## v1.10.0a1 (2022-08-22)
+
+Pre-release, see [the GitHub release](https://github.com/pydantic/pydantic/releases/tag/v1.10.0a1) for details.
+
+## v1.9.2 (2022-08-11)
+
+**Revert Breaking Change**: _v1.9.1_ introduced a breaking change where model fields were
+deep copied by default, this release reverts the default behaviour to match _v1.9.0_ and before,
+while also allow deep-copy behaviour via `copy_on_model_validation = 'deep'`. See #4092 for more information.
+
+* Allow for shallow copies of model fields, `Config.copy_on_model_validation` is now a str which must be
+  `'none'`, `'deep'`, or `'shallow'` corresponding to not copying, deep copy & shallow copy; default `'shallow'`,
+  #4093 by @timkpaine
+
+## v1.9.1 (2022-05-19)
+
+Thank you to pydantic's sponsors:
+@tiangolo, @stellargraph, @JonasKs, @grillazz, @Mazyod, @kevinalh, @chdsbd, @povilasb, @povilasb, @jina-ai,
+@mainframeindustries, @robusta-dev, @SendCloud, @rszamszur, @jodal, @hardbyte, @corleyma, @daddycocoaman,
+@Rehket, @jokull, @reillysiemens, @westonsteimel, @primer-io, @koxudaxi, @browniebroke, @stradivari96,
+@adriangb, @kamalgill, @jqueguiner, @dev-zero, @datarootsio, @RedCarpetUp
+for their kind support.
+
+* Limit the size of `generics._generic_types_cache` and `generics._assigned_parameters`
+  to avoid unlimited increase in memory usage, #4083 by @samuelcolvin
+* Add Jupyverse and FPS as Jupyter projects using pydantic, #4082 by @davidbrochart
+* Speedup `__isinstancecheck__` on pydantic models when the type is not a model, may also avoid memory "leaks", #4081 by @samuelcolvin
+* Fix in-place modification of `FieldInfo` that caused problems with PEP 593 type aliases, #4067 by @adriangb
+* Add support for autocomplete in VS Code via `__dataclass_transform__` when using `pydantic.dataclasses.dataclass`, #4006 by @giuliano-oliveira
+* Remove benchmarks from codebase and docs, #3973 by @samuelcolvin
+* Typing checking with pyright in CI, improve docs on vscode/pylance/pyright, #3972 by @samuelcolvin
+* Fix nested Python dataclass schema regression, #3819 by @himbeles
+* Update documentation about lazy evaluation of sources for Settings, #3806 by @garyd203
+* Prevent subclasses of bytes being converted to bytes, #3706 by @samuelcolvin
+* Fixed "error checking inheritance of" when using PEP585 and PEP604 type hints, #3681 by @aleksul
+* Allow self referencing `ClassVar`s in models, #3679 by @samuelcolvin
+* **Breaking Change, see #4106**: Fix issue with self-referencing dataclass, #3675 by @uriyyo
+* Include non-standard port numbers in rendered URLs, #3652 by @dolfinus
+* `Config.copy_on_model_validation` does a deep copy and not a shallow one, #3641 by @PrettyWood
+* fix: clarify that discriminated unions do not support singletons, #3636 by @tommilligan
+* Add `read_text(encoding='utf-8')` for `setup.py`, #3625 by @hswong3i
+* Fix JSON Schema generation for Discriminated Unions within lists, #3608 by @samuelcolvin
+
 ## v1.9.0 (2021-12-31)
 
 Thank you to pydantic's sponsors:
 @sthagen, @timdrijvers, @toinbis, @koxudaxi, @ginomempin, @primer-io, @and-semakin, @westonsteimel, @reillysiemens,
-@es3n1n, @jokull, @JonasKs, @Rehket, @corleyma, @daddycocoaman, @hardbyte, @datarootsio, @jodal, @aminalaee, @rafsaf, 
+@es3n1n, @jokull, @JonasKs, @Rehket, @corleyma, @daddycocoaman, @hardbyte, @datarootsio, @jodal, @aminalaee, @rafsaf,
 @jqueguiner, @chdsbd, @kevinalh, @Mazyod, @grillazz, @JonasKs, @simw, @leynier, @xfenix
 for their kind support.
 
 ### Highlights
 
-* add python 3.10 support, #2885 by @PrettyWood
+* add Python 3.10 support, #2885 by @PrettyWood
 * [Discriminated unions](https://pydantic-docs.helpmanual.io/usage/types/#discriminated-unions-aka-tagged-unions), #619 by @PrettyWood
 * [`Config.smart_union` for better union logic](https://pydantic-docs.helpmanual.io/usage/model_config/#smart-union), #2092 by @PrettyWood
 * Binaries for Macos M1 CPUs, #3498 by @samuelcolvin
@@ -35,7 +185,7 @@ for their kind support.
 
 ### v1.9.0a1 (2021-12-18) Changes
 
-* Add support for `Decimal`-specific validation configurations in `Field()`, additionally to using `condecimal()`, 
+* Add support for `Decimal`-specific validation configurations in `Field()`, additionally to using `condecimal()`,
   to allow better support from editors and tooling, #3507 by @tiangolo
 * Add `arm64` binaries suitable for MacOS with an M1 CPU to PyPI, #3498 by @samuelcolvin
 * Fix issue where `None` was considered invalid when using a `Union` type containing `Any` or `object`, #3444 by @tharradine
@@ -43,7 +193,7 @@ for their kind support.
   `pydantic.fields.ModelField`) to `__modify_schema__()` if present, #3434 by @jasujm
 * Fix issue when pydantic fail to parse `typing.ClassVar` string type annotation, #3401 by @uriyyo
 * Mention Python >= 3.9.2 as an alternative to `typing_extensions.TypedDict`, #3374 by @BvB93
-* Changed the validator method name in the [Custom Errors example](https://pydantic-docs.helpmanual.io/usage/models/#custom-errors) 
+* Changed the validator method name in the [Custom Errors example](https://pydantic-docs.helpmanual.io/usage/models/#custom-errors)
   to more accurately describe what the validator is doing; changed from `name_must_contain_space` to ` value_must_equal_bar`, #3327 by @michaelrios28
 * Add `AmqpDsn` class, #3254 by @kludex
 * Always use `Enum` value as default in generated JSON schema, #3190 by @joaommartins
@@ -61,19 +211,19 @@ for their kind support.
 * Make multiple inheritance work when using `PrivateAttr`, #2989 by @hmvp
 * Parse environment variables as JSON, if they have a `Union` type with a complex subfield, #2936 by @cbartz
 * Prevent `StrictStr` permitting `Enum` values where the enum inherits from `str`, #2929 by @samuelcolvin
-* Make `SecretsSettingsSource` parse values being assigned to fields of complex types when sourced from a secrets file, 
+* Make `SecretsSettingsSource` parse values being assigned to fields of complex types when sourced from a secrets file,
   just as when sourced from environment variables, #2917 by @davidmreed
 * add a dark mode to _pydantic_ documentation, #2913 by @gbdlin
-* Make `pydantic-mypy` plugin compatible with `pyproject.toml` configuration, consistent with `mypy` changes. 
+* Make `pydantic-mypy` plugin compatible with `pyproject.toml` configuration, consistent with `mypy` changes.
   See the [doc](https://pydantic-docs.helpmanual.io/mypy_plugin/#configuring-the-plugin) for more information, #2908 by @jrwalk
-* add python 3.10 support, #2885 by @PrettyWood
+* add Python 3.10 support, #2885 by @PrettyWood
 * Correctly parse generic models with `Json[T]`, #2860 by @geekingfrog
-* Update contrib docs re: python version to use for building docs, #2856 by @paxcodes
-* Clarify documentation about _pydantic_'s support for custom validation and strict type checking, 
+* Update contrib docs re: Python version to use for building docs, #2856 by @paxcodes
+* Clarify documentation about _pydantic_'s support for custom validation and strict type checking,
   despite _pydantic_ being primarily a parsing library, #2855 by @paxcodes
 * Fix schema generation for `Deque` fields, #2810 by @sergejkozin
 * fix an edge case when mixing constraints and `Literal`, #2794 by @PrettyWood
-* Fix postponed annotation resolution for `NamedTuple` and `TypedDict` when they're used directly as the type of fields 
+* Fix postponed annotation resolution for `NamedTuple` and `TypedDict` when they're used directly as the type of fields
   within Pydantic models, #2760 by @jameysharp
 * Fix bug when `mypy` plugin fails on `construct` method call for `BaseSettings` derived classes, #2753 by @uriyyo
 * Add function overloading for a `pydantic.create_model` function, #2748 by @uriyyo
@@ -87,7 +237,7 @@ for their kind support.
 * Add episode 313 of the *Talk Python To Me* podcast, where Michael Kennedy and Samuel Colvin discuss *pydantic*, to the docs, #2712 by @RatulMaharaj
 * fix JSON schema generation when a field is of type `NamedTuple` and has a default value, #2707 by @PrettyWood
 * `Enum` fields now properly support extra kwargs in schema generation, #2697 by @sammchardy
-* Make serialization of referenced pydantic models possible, #2650 by @PrettyWood
+* **Breaking Change, see #3780**: Make serialization of referenced pydantic models possible, #2650 by @PrettyWood
 * Add `uniqueItems` option to `ConstrainedList`, #2618 by @nuno-andre
 * Try to evaluate forward refs automatically at model creation, #2588 by @uriyyo
 * Switch docs preview and coverage display to use [smokeshow](https://smokeshow.helpmanual.io/), #2580 by @samuelcolvin
@@ -95,8 +245,8 @@ for their kind support.
 * Add `postgresql+asyncpg`, `postgresql+pg8000`, `postgresql+psycopg2`, `postgresql+psycopg2cffi`, `postgresql+py-postgresql`
   and `postgresql+pygresql` schemes for `PostgresDsn`, #2567 by @postgres-asyncpg
 * Enable the Hypothesis plugin to generate a constrained decimal when the `decimal_places` argument is specified, #2524 by @cwe5590
-* Allow `collections.abc.Callable` to be used as type in python 3.9, #2519 by @daviskirk
-* Documentation update how to custom compile pydantic when using pip install, small change in `setup.py` 
+* Allow `collections.abc.Callable` to be used as type in Python 3.9, #2519 by @daviskirk
+* Documentation update how to custom compile pydantic when using pip install, small change in `setup.py`
   to allow for custom CFLAGS when compiling, #2517 by @peterroelants
 * remove side effect of `default_factory` to run it only once even if `Config.validate_all` is set, #2515 by @PrettyWood
 * Add lookahead to ip regexes for `AnyUrl` hosts. This allows urls with DNS labels
@@ -109,7 +259,7 @@ for their kind support.
 * Add `PastDate` and `FutureDate` types, #2425 by @Kludex
 * Support generating schema for `Generic` fields with subtypes, #2375 by @maximberg
 * fix(encoder): serialize `NameEmail` to str, #2341 by @alecgerona
-* add `Config.smart_union` to prevent coercion in `Union` if possible, see 
+* add `Config.smart_union` to prevent coercion in `Union` if possible, see
  [the doc](https://pydantic-docs.helpmanual.io/usage/model_config/#smart-union) for more information, #2092 by @PrettyWood
 * Add ability to use `typing.Counter` as a model field type, #2060 by @uriyyo
 * Add parameterised subclasses to `__bases__` when constructing new parameterised classes, so that `A <: B => A[int] <: B[int]`, #2007 by @diabolo-dan
@@ -124,22 +274,22 @@ for their kind support.
 
 !!! warning
     A security vulnerability, level "moderate" is fixed in v1.8.2. Please upgrade **ASAP**.
-    See security advisory [CVE-2021-29510](https://github.com/samuelcolvin/pydantic/security/advisories/GHSA-5jqp-qgf6-3pvh)
+    See security advisory [CVE-2021-29510](https://github.com/pydantic/pydantic/security/advisories/GHSA-5jqp-qgf6-3pvh)
 
-* **Security fix:** Fix `date` and `datetime` parsing so passing either `'infinity'` or `float('inf')` 
-  (or their negative values) does not cause an infinite loop, 
-  see security advisory [CVE-2021-29510](https://github.com/samuelcolvin/pydantic/security/advisories/GHSA-5jqp-qgf6-3pvh)
+* **Security fix:** Fix `date` and `datetime` parsing so passing either `'infinity'` or `float('inf')`
+  (or their negative values) does not cause an infinite loop,
+  see security advisory [CVE-2021-29510](https://github.com/pydantic/pydantic/security/advisories/GHSA-5jqp-qgf6-3pvh)
 * fix schema generation with Enum by generating a valid name, #2575 by @PrettyWood
 * fix JSON schema generation with a `Literal` of an enum member, #2536 by @PrettyWood
 * Fix bug with configurations declarations that are passed as
   keyword arguments during class creation, #2532 by @uriyyo
 * Allow passing `json_encoders` in class kwargs, #2521 by @layday
 * support arbitrary types with custom `__eq__`, #2483 by @PrettyWood
-* support `Annotated` in `validate_arguments` and in generic models with python 3.9, #2483 by @PrettyWood
+* support `Annotated` in `validate_arguments` and in generic models with Python 3.9, #2483 by @PrettyWood
 
 ## v1.8.1 (2021-03-03)
 
-Bug fixes for regressions and new features from `v1.8` 
+Bug fixes for regressions and new features from `v1.8`
 
 * allow elements of `Config.field` to update elements of a `Field`, #2461 by @samuelcolvin
 * fix validation with a `BaseModel` field and a custom root type, #2449 by @PrettyWood
@@ -153,8 +303,8 @@ Bug fixes for regressions and new features from `v1.8`
 ## v1.8 (2021-02-26)
 
 Thank you to pydantic's sponsors:
-@jorgecarleitao, @BCarley, @chdsbd, @tiangolo, @matin, @linusg, @kevinalh, @koxudaxi, @timdrijvers, @mkeen, @meadsteve, 
-@ginomempin, @primer-io, @and-semakin, @tomthorogood, @AjitZK, @westonsteimel, @Mazyod, @christippett, @CarlosDomingues, 
+@jorgecarleitao, @BCarley, @chdsbd, @tiangolo, @matin, @linusg, @kevinalh, @koxudaxi, @timdrijvers, @mkeen, @meadsteve,
+@ginomempin, @primer-io, @and-semakin, @tomthorogood, @AjitZK, @westonsteimel, @Mazyod, @christippett, @CarlosDomingues,
 @Kludex, @r-m-n
 for their kind support.
 
@@ -178,7 +328,7 @@ for their kind support.
 * **Breaking Change:** always validate only first sublevel items with `each_item`.
   There were indeed some edge cases with some compound types where the validated items were the last sublevel ones, #1933 by @PrettyWood
 * Update docs extensions to fix local syntax highlighting, #2400 by @daviskirk
-* fix: allow `utils.lenient_issubclass` to handle `typing.GenericAlias` objects like `list[str]` in python >= 3.9, #2399 by @daviskirk
+* fix: allow `utils.lenient_issubclass` to handle `typing.GenericAlias` objects like `list[str]` in Python >= 3.9, #2399 by @daviskirk
 * Improve field declaration for _pydantic_ `dataclass` by allowing the usage of _pydantic_ `Field` or `'metadata'` kwarg of `dataclasses.field`, #2384 by @PrettyWood
 * Making `typing-extensions` a required dependency, #2368 by @samuelcolvin
 * Make `resolve_annotations` more lenient, allowing for missing modules, #2363 by @samuelcolvin
@@ -245,9 +395,9 @@ for their kind support.
 
 ## v1.7.4 (2021-05-11)
 
-* **Security fix:** Fix `date` and `datetime` parsing so passing either `'infinity'` or `float('inf')` 
+* **Security fix:** Fix `date` and `datetime` parsing so passing either `'infinity'` or `float('inf')`
   (or their negative values) does not cause an infinite loop,
-  See security advisory [CVE-2021-29510](https://github.com/samuelcolvin/pydantic/security/advisories/GHSA-5jqp-qgf6-3pvh)
+  See security advisory [CVE-2021-29510](https://github.com/pydantic/pydantic/security/advisories/GHSA-5jqp-qgf6-3pvh)
 
 ## v1.7.3 (2020-11-30)
 
@@ -284,12 +434,12 @@ for their kind support.
 ## v1.7 (2020-10-26)
 
 Thank you to pydantic's sponsors:
-@timdrijvers, @BCarley, @chdsbd, @tiangolo, @matin, @linusg, @kevinalh, @jorgecarleitao, @koxudaxi, @primer-api 
+@timdrijvers, @BCarley, @chdsbd, @tiangolo, @matin, @linusg, @kevinalh, @jorgecarleitao, @koxudaxi, @primer-api
 for their kind support.
 
 ### Highlights
 
-* python 3.9 support, thanks @PrettyWood
+* Python 3.9 support, thanks @PrettyWood
 * [Private model attributes](https://pydantic-docs.helpmanual.io/usage/models/#private-model-attributes), thanks @Bobronium
 * ["secrets files" support in `BaseSettings`](https://pydantic-docs.helpmanual.io/usage/settings/#secret-support), thanks @mdgilene
 * [convert stdlib dataclasses to pydantic dataclasses and use stdlib dataclasses in models](https://pydantic-docs.helpmanual.io/usage/dataclasses/#stdlib-dataclasses-and-pydantic-dataclasses), thanks @PrettyWood
@@ -299,7 +449,7 @@ for their kind support.
 * **Breaking Change:** remove `__field_defaults__`, add `default_factory` support with `BaseModel.construct`.
   Use `.get_default()` method on fields in `__fields__` attribute instead, #1732 by @PrettyWood
 * Rearrange CI to run linting as a separate job, split install recipes for different tasks, #2020 by @samuelcolvin
-* Allows subclasses of generic models to make some, or all, of the superclass's type parameters concrete, while 
+* Allows subclasses of generic models to make some, or all, of the superclass's type parameters concrete, while
   also defining new type parameters in the subclass, #2005 by @choogeboom
 * Call validator with the correct `values` parameter type in `BaseModel.__setattr__`,
   when `validate_assignment = True` in model config, #1999 by @me-ransh
@@ -309,7 +459,7 @@ for their kind support.
 * Also check `root_validators` when `validate_assignment` is on, #1971 by @PrettyWood
 * Fix const validators not running when custom validators are present, #1957 by @hmvp
 * add `deque` to field types, #1935 by @wozniakty
-* add basic support for python 3.9, #1832 by @PrettyWood
+* add basic support for Python 3.9, #1832 by @PrettyWood
 * Fix typo in the anchor of exporting_models.md#modelcopy and incorrect description, #1821 by @KimMachineGun
 * Added ability for `BaseSettings` to read "secret files", #1820 by @mdgilene
 * add `parse_raw_as` utility function, #1812 by @PrettyWood
@@ -320,17 +470,17 @@ for their kind support.
 * add basic support of Pattern type in schema generation, #1767 by @PrettyWood
 * Support custom title, description and default in schema of enums, #1748 by @PrettyWood
 * Properly represent `Literal` Enums when `use_enum_values` is True, #1747 by @noelevans
-* Allows timezone information to be added to strings to be formatted as time objects. Permitted formats are `Z` for UTC 
+* Allows timezone information to be added to strings to be formatted as time objects. Permitted formats are `Z` for UTC
   or an offset for absolute positive or negative time shifts. Or the timezone data can be omitted, #1744 by @noelevans
-* Add stub `__init__` with python 3.6 signature for `ForwardRef`, #1738 by @sirtelemak
+* Add stub `__init__` with Python 3.6 signature for `ForwardRef`, #1738 by @sirtelemak
 * Fix behaviour with forward refs and optional fields in nested models, #1736 by @PrettyWood
 * add `Enum` and `IntEnum` as valid types for fields, #1735 by @PrettyWood
-* Change default value of `__module__` argument of `create_model` from `None` to `'pydantic.main'`. 
-  Set reference of created concrete model to it's module to allow pickling (not applied to models created in 
+* Change default value of `__module__` argument of `create_model` from `None` to `'pydantic.main'`.
+  Set reference of created concrete model to it's module to allow pickling (not applied to models created in
   functions), #1686 by @Bobronium
 * Add private attributes support, #1679 by @Bobronium
 * add `config` to `@validate_arguments`, #1663 by @samuelcolvin
-* Allow descendant Settings models to override env variable names for the fields defined in parent Settings models with 
+* Allow descendant Settings models to override env variable names for the fields defined in parent Settings models with
   `env` in their `Config`. Previously only `env_prefix` configuration option was applicable, #1561 by @ojomio
 * Support `ref_template` when creating schema `$ref`s, #1479 by @kilo59
 * Add a `__call__` stub to `PyObject` so that mypy will know that it is callable, #1352 by @brianmaissy
@@ -340,9 +490,9 @@ for their kind support.
 
 ## v1.6.2 (2021-05-11)
 
-* **Security fix:** Fix `date` and `datetime` parsing so passing either `'infinity'` or `float('inf')` 
+* **Security fix:** Fix `date` and `datetime` parsing so passing either `'infinity'` or `float('inf')`
   (or their negative values) does not cause an infinite loop,
-  See security advisory [CVE-2021-29510](https://github.com/samuelcolvin/pydantic/security/advisories/GHSA-5jqp-qgf6-3pvh)
+  See security advisory [CVE-2021-29510](https://github.com/pydantic/pydantic/security/advisories/GHSA-5jqp-qgf6-3pvh)
 
 ## v1.6.1 (2020-07-15)
 
@@ -406,10 +556,10 @@ Thank you to pydantic's sponsors: @matin, @tiangolo, @chdsbd, @jorgecarleitao, a
 * Confirm that shallow `model.copy()` does make a shallow copy of attributes, #1383 by @samuelcolvin
 * Renaming `model_name` argument of `main.create_model()` to `__model_name` to allow using `model_name` as a field name, #1367 by @kittipatv
 * Replace raising of exception to silent passing  for non-Var attributes in mypy plugin, #1345 by @b0g3r
-* Remove `typing_extensions` dependency for python 3.8, #1342 by @prettywood
+* Remove `typing_extensions` dependency for Python 3.8, #1342 by @prettywood
 * Make `SecretStr` and `SecretBytes` initialization idempotent, #1330 by @atheuz
 * document making secret types dumpable using the json method, #1328 by @atheuz
-* Move all testing and build to github actions, add windows and macos binaries, 
+* Move all testing and build to github actions, add windows and macos binaries,
   thank you @StephenBrown2 for much help, #1326 by @samuelcolvin
 * fix card number length check in `PaymentCardNumber`, `PaymentCardBrand` now inherits from `str`, #1317 by @samuelcolvin
 * Have `BaseModel` inherit from `Representation` to make mypy happy when overriding `__str__`, #1310 by @FuegoFro
@@ -488,7 +638,7 @@ Thank you to pydantic's sponsors: @matin, @tiangolo, @chdsbd, @jorgecarleitao, a
 * Add support for dataclasses default factory, #968 by @ahirner
 * Add a `ByteSize` type for converting byte string (`1GB`) to plain bytes, #977 by @dgasmith
 * Fix mypy complaint about `@root_validator(pre=True)`, #984 by @samuelcolvin
-* Add manylinux binaries for python 3.8 to pypi, also support manylinux2010, #994 by @samuelcolvin
+* Add manylinux binaries for Python 3.8 to pypi, also support manylinux2010, #994 by @samuelcolvin
 * Adds ByteSize conversion to another unit, #995 by @dgasmith
 * Fix `__str__` and `__repr__` inheritance for models, #1022 by @samuelcolvin
 * add testimonials section to docs, #1025 by @sullivancolin
@@ -591,6 +741,8 @@ Thank you to pydantic's sponsors: @matin, @tiangolo, @chdsbd, @jorgecarleitao, a
 * rename `Model._schema_cache` -> `Model.__schema_cache__`, `Model._json_encoder` -> `Model.__json_encoder__`,
   `Model._custom_root_type` -> `Model.__custom_root_type__`, #851 by @samuelcolvin
 
+<!-- package description limit -->
+
 ## v0.32.2 (2019-08-17)
 
 (Docs are available [here](https://5d584fcca7c9b70007d1c997--pydantic-docs.netlify.com))
@@ -640,7 +792,7 @@ Thank you to pydantic's sponsors: @matin, @tiangolo, @chdsbd, @jorgecarleitao, a
 * enforce single quotes in code, #612 by @samuelcolvin
 * fix infinite recursion with dataclass inheritance and `__post_init__`, #606 by @Hanaasagi
 * fix default values for `GenericModel`, #610 by @dmontagu
-* clarify that self-referencing models require python 3.7+, #616 by @vlcinsky
+* clarify that self-referencing models require Python 3.7+, #616 by @vlcinsky
 * fix truncate for types, #611 by @dmontagu
 * add `alias_generator` support, #622 by @Bobronium
 * fix unparameterized generic type schema generation, #625 by @dmontagu
@@ -737,7 +889,7 @@ Thank you to pydantic's sponsors: @matin, @tiangolo, @chdsbd, @jorgecarleitao, a
 
 ## v0.20.0 (2019-02-18)
 
-* fix tests for python 3.8, #396 by @samuelcolvin
+* fix tests for Python 3.8, #396 by @samuelcolvin
 * Adds fields to the `dir` method for autocompletion in interactive sessions, #398 by @dgasmith
 * support `ForwardRef` (and therefore `from __future__ import annotations`) with dataclasses, #397 by @samuelcolvin
 
@@ -919,7 +1071,7 @@ Thank you to pydantic's sponsors: @matin, @tiangolo, @chdsbd, @jorgecarleitao, a
 
 ## v0.6.4 (2018-02-01)
 
-* allow python date and times objects #122
+* allow Python date and times objects #122
 
 ## v0.6.3 (2017-11-26)
 

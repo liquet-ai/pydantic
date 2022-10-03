@@ -7,7 +7,7 @@ import json
 import os
 from datetime import date, datetime, timedelta
 from pathlib import Path, PurePath
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, ForwardRef, Generic, List, Optional, TypeVar
 from uuid import UUID
 
 from typing_extensions import TypedDict
@@ -16,7 +16,6 @@ from pydantic import (
     UUID1,
     BaseConfig,
     BaseModel,
-    BaseSettings,
     DirectoryPath,
     Extra,
     FilePath,
@@ -47,7 +46,6 @@ from pydantic import (
 )
 from pydantic.fields import Field, PrivateAttr
 from pydantic.generics import GenericModel
-from pydantic.typing import ForwardRef
 
 
 class Flags(BaseModel):
@@ -230,7 +228,8 @@ class PydanticTypes(BaseModel):
     my_dir_path: DirectoryPath = Path('.')
     my_dir_path_str: DirectoryPath = '.'  # type: ignore
     # Json
-    my_json: Json = '{"hello": "world"}'
+    my_json: Json[Dict[str, str]] = '{"hello": "world"}'  # type: ignore
+    my_json_list: Json[List[str]] = '["hello", "world"]'  # type: ignore
     # Date
     my_past_date: PastDate = date.today() - timedelta(1)
     my_future_date: FutureDate = date.today() + timedelta(1)
@@ -248,6 +247,8 @@ validated.my_file_path.absolute()
 validated.my_file_path_str.absolute()
 validated.my_dir_path.absolute()
 validated.my_dir_path_str.absolute()
+validated.my_json['hello'].capitalize()
+validated.my_json_list[0].capitalize()
 
 stricturl(allowed_schemes={'http'})
 stricturl(allowed_schemes=frozenset({'http'}))
@@ -271,21 +272,12 @@ class Config(BaseConfig):
     max_anystr_length = 1234
 
 
-class Settings(BaseSettings):
-    ...
-
-
 class CustomPath(PurePath):
     def __init__(self, *args: str):
         self.path = os.path.join(*args)
 
     def __fspath__(self) -> str:
         return f'a/custom/{self.path}'
-
-
-def dont_check_path_existence() -> None:
-    Settings(_env_file='a/path', _secrets_dir='a/path')
-    Settings(_env_file=CustomPath('a/path'), _secrets_dir=CustomPath('a/path'))
 
 
 create_model_from_typeddict(SomeDict)(**obj)

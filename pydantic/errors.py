@@ -186,7 +186,10 @@ class DictError(PydanticTypeError):
 
 
 class EmailError(PydanticValueError):
-    msg_template = 'value is not a valid email address'
+    msg_template = 'value is not a valid email address: {reason}'
+
+    def __init__(self, reason: str):
+        super().__init__(reason=reason)
 
 
 class UrlError(PydanticValueError):
@@ -415,6 +418,11 @@ class NumberNotLtError(_NumberBoundError):
 class NumberNotLeError(_NumberBoundError):
     code = 'number.not_le'
     msg_template = 'ensure this value is less than or equal to {limit_value}'
+
+
+class NumberNotFiniteError(PydanticValueError):
+    code = 'number.not_finite_number'
+    msg_template = 'ensure this value is a finite number'
 
 
 class NumberNotMultipleError(PydanticValueError):
