@@ -7,21 +7,36 @@ install:
 	pip install -r requirements/all.txt
 	pip install -e .
 
+.PHONY: refresh-lockfiles
+refresh-lockfiles:
+	@echo "Updating requirements/*.txt files using pip-compile"
+	find requirements/ -name '*.txt' ! -name 'all.txt' -type f -delete
+	pip-compile -q --resolver backtracking -o requirements/docs.txt requirements/docs.in
+	pip-compile -q --resolver backtracking -o requirements/linting.txt requirements/linting.in
+	pip-compile -q --resolver backtracking -o requirements/testing.txt requirements/testing.in
+	pip-compile -q --resolver backtracking -o requirements/testing-extra.txt requirements/testing-extra.in
+	pip-compile -q --resolver backtracking -o requirements/pyproject-min.txt pyproject.toml
+	pip-compile -q --resolver backtracking -o requirements/pyproject-all.txt pyproject.toml --extra=email
+	pip install --dry-run -r requirements/all.txt
+
 .PHONY: format
 format:
-	pyupgrade --py37-plus --exit-zero-even-if-changed `find $(sources) -name "*.py" -type f`
 	isort $(sources)
 	black $(sources)
 
 .PHONY: lint
 lint:
-	flake8 $(sources)
+	ruff $(sources)
 	isort $(sources) --check-only --df
 	black $(sources) --check --diff
 
+.PHONY: lint-flake8
+lint-flake8:
+	flake8 $(sources)
+
 .PHONY: mypy
 mypy:
-	mypy pydantic docs/build
+	mypy pydantic docs/build --disable-recursive-aliases
 
 .PHONY: pyupgrade
 pyupgrade:
@@ -90,9 +105,3 @@ docs:
 docs-serve:
 	python docs/build/main.py
 	mkdocs serve
-
-.PHONY: publish-docs
-publish-docs:
-	zip -r site.zip site
-	@curl -H "Content-Type: application/zip" -H "Authorization: Bearer ${NETLIFY}" \
-	      --data-binary "@site.zip" https://api.netlify.com/api/v1/sites/pydantic-docs.netlify.com/deploys

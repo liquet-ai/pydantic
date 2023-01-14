@@ -24,7 +24,7 @@ class SelfReferencingModel(BaseModel):
         ...
 
 
-SelfReferencingModel.update_forward_refs()
+SelfReferencingModel.model_rebuild()
 
 model = Model(x=1, y='y')
 Model(x=1, y='y', z='z')
@@ -32,6 +32,20 @@ model.x = 2
 model.from_orm(model)
 
 self_referencing_model = SelfReferencingModel(submodel=SelfReferencingModel(submodel=None))
+
+
+class KwargsModel(BaseModel, orm_mode=True):
+    x: float
+    y: str
+
+    class NotConfig:
+        allow_mutation = False
+
+
+kwargs_model = KwargsModel(x=1, y='y')
+KwargsModel(x=1, y='y', z='z')
+kwargs_model.x = 2
+kwargs_model.from_orm(kwargs_model)
 
 
 class InheritingModel(Model):
@@ -49,7 +63,7 @@ class FutureModel(Model):
     pass
 
 
-ForwardReferencingModel.update_forward_refs()
+ForwardReferencingModel.model_rebuild()
 future_model = FutureModel(x=1, y='a')
 forward_model = ForwardReferencingModel(x=1, y='a', future=future_model)
 
@@ -71,6 +85,18 @@ class MutationModel(NoMutationModel):
 
 MutationModel(x=1).x = 2
 MutationModel.from_orm(model)
+
+
+class KwargsNoMutationModel(BaseModel, allow_mutation=False):
+    x: int
+
+
+class KwargsMutationModel(KwargsNoMutationModel, allow_mutation=True, orm_mode=True):
+    a = 1
+
+
+KwargsMutationModel(x=1).x = 2
+KwargsMutationModel.from_orm(model)
 
 
 class OverrideModel(Model):
@@ -161,6 +187,18 @@ NotFrozenModel(x=1).x = 2
 NotFrozenModel.from_orm(model)
 
 
+class KwargsFrozenModel(BaseModel, frozen=True):
+    x: int
+
+
+class KwargsNotFrozenModel(FrozenModel, frozen=False, orm_mode=True):
+    a: int = 1
+
+
+KwargsNotFrozenModel(x=1).x = 2
+KwargsNotFrozenModel.from_orm(model)
+
+
 class ModelWithSelfField(BaseModel):
     self: str
 
@@ -197,11 +235,11 @@ class ModelWithAnnotatedValidator(BaseModel):
 
 
 def _default_factory_str() -> str:
-    ...
+    return 'x'
 
 
 def _default_factory_list() -> List[int]:
-    ...
+    return [1, 2, 3]
 
 
 class FieldDefaultTestingModel(BaseModel):

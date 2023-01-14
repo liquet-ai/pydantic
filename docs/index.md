@@ -66,6 +66,12 @@ Development of *pydantic* is made possible by the following sponsors:
       <span>SendCloud</span>
     </a>
   </div>
+  <div>
+    <a rel="sponsored" target="_blank" href="https://jina.ai">
+      <img src="./sponsor_logos/jina-ai.png" alt="Jina AI" />
+      <span>Jina AI</span>
+    </a>
+  </div>
 </div>
 
 And many more who kindly sponsor Samuel Colvin on [GitHub Sponsors](https://github.com/sponsors/samuelcolvin#sponsors).
@@ -175,7 +181,7 @@ Hundreds of organisations and packages are using *pydantic*, including:
   *pydantic* models.
 
 For a more comprehensive list of open-source projects using *pydantic* see the
-[list of dependents on github](https://github.com/pydantic/pydantic/network/dependents).
+[list of dependents on github](https://github.com/pydantic/pydantic/network/dependents), Or you can find some awesome projects using *pydantic* in [awesome-pydantic](https://github.com/Kludex/awesome-pydantic).
 
 ## Discussion of Pydantic
 

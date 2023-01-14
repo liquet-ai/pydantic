@@ -50,15 +50,15 @@ Similarly, if using the `@dataclass` decorator:
 
 **`use_enum_values`**
 : whether to populate models with the `value` property of enums, rather than the raw enum.
-  This may be useful if you want to serialise `model.dict()` later (default: `False`)
+  This may be useful if you want to serialise `model.model_dump()` later (default: `False`)
 
 **`fields`**
 : a `dict` containing schema information for each field; this is equivalent to
   using [the `Field` class](schema.md), except when a field is already
-  defined trough annotation or the Field class, in which case only
+  defined through annotation or the Field class, in which case only
   `alias`, `include`, `exclude`, `min_length`, `max_length`, `regex`, `gt`, `lt`, `gt`, `le`,
   `multiple_of`, `max_digits`, `decimal_places`, `min_items`, `max_items`, `unique_items`
-  and allow_mutation can be set (for example you cannot set default of default_factory)
+  and `allow_mutation` can be set (for example you cannot set default of `default_factory`)
    (default: `None`)
 
 **`validate_assignment`**
@@ -81,6 +81,11 @@ Similarly, if using the `@dataclass` decorator:
   checking if the value is an instance of the type). If `False`, `RuntimeError` will be
   raised on model declaration (default: `False`). See an example in
   [Field Types](types.md#arbitrary-types-allowed).
+
+**`undefined_types_warning`**
+: whether to raise a warning if a type is undefined when a model is declared. This occurs when a type is defined in another model declared elsewhere in code which has not yet executed.
+  If `True`, `UserWarning` will be raised on model declaration (default: `True`).
+  See an example in [Field Types](types.md#undefined_types_warning).
 
 **`orm_mode`**
 : whether to allow usage of [ORM mode](models.md#orm-mode-aka-arbitrary-class-instances)
@@ -127,7 +132,7 @@ with the following means (see [#4093](https://github.com/pydantic/pydantic/pull/
   or after (value `'after_validation'`) parsing and validation when they are [converted](dataclasses.md#stdlib-dataclasses-and-_pydantic_-dataclasses).
 
 **`allow_inf_nan`**
-: whether to allows infinity (`+inf` an `-inf`) and NaN values to float fields, defaults to `True`,
+: whether to allow infinity (`+inf` an `-inf`) and NaN values to float fields, defaults to `True`,
   set to `False` for compatibility with `JSON`,
   see [#3994](https://github.com/pydantic/pydantic/pull/3994) for more details, added in **V1.10**
 

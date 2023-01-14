@@ -18,6 +18,7 @@ from mypy.nodes import (
     Context,
     Decorator,
     EllipsisExpr,
+    Expression,
     FuncBase,
     FuncDef,
     JsonDict,
@@ -44,7 +45,7 @@ from mypy.plugin import (
     SemanticAnalyzerPluginInterface,
 )
 from mypy.plugins import dataclasses
-from mypy.semanal import set_callable_name  # type: ignore
+from mypy.semanal import set_callable_name
 from mypy.server.trigger import make_wildcard_trigger
 from mypy.types import (
     AnyType,
@@ -62,8 +63,6 @@ from mypy.types import (
 from mypy.typevars import fill_typevars
 from mypy.util import get_unique_redefinition_name
 from mypy.version import __version__ as mypy_version
-
-from pydantic.utils import is_valid_field
 
 try:
     from mypy.types import TypeVarDef  # type: ignore[attr-defined]
@@ -263,7 +262,7 @@ class PydanticModelTransformer:
                 if not ctx.api.final_iteration:
                     ctx.api.defer()
         self.add_initializer(fields, config)
-        self.add_construct_method(fields)
+        self.add_model_construct_method(fields)
         self.set_frozen(fields, frozen=config.allow_mutation is False or config.frozen is True)
         info.metadata[METADATA_KEY] = {
             'fields': {field.name: field.serialize() for field in fields},
@@ -284,7 +283,7 @@ class PydanticModelTransformer:
                 if (
                     isinstance(first_dec, CallExpr)
                     and isinstance(first_dec.callee, NameExpr)
-                    and first_dec.callee.fullname == 'pydantic.class_validators.validator'
+                    and first_dec.callee.fullname == 'pydantic.validator_functions.validator'
                 ):
                     sym.node.func.is_class = True
 
@@ -295,20 +294,45 @@ class PydanticModelTransformer:
         ctx = self._ctx
         cls = ctx.cls
         config = ModelConfigData()
+
+        has_config_kwargs = False
+        has_config_from_namespace = False
+
+        for name, expr in cls.keywords.items():
+            config_data = self.get_config_update(name, expr)
+            if config_data:
+                has_config_kwargs = True
+                config.update(config_data)
+
         for stmt in cls.defs.body:
             if not isinstance(stmt, ClassDef):
                 continue
-            if stmt.name == 'Config':
-                for substmt in stmt.defs.body:
-                    if not isinstance(substmt, AssignmentStmt):
-                        continue
-                    config.update(self.get_config_update(substmt))
-                if (
-                    config.has_alias_generator
-                    and not config.allow_population_by_field_name
-                    and self.plugin_config.warn_required_dynamic_aliases
-                ):
-                    error_required_dynamic_aliases(ctx.api, stmt)
+            if stmt.name != 'Config':
+                continue
+
+            if has_config_kwargs:
+                ctx.api.fail(
+                    'Specifying config in two places is ambiguous, use either Config attribute or class kwargs',
+                    cls,
+                )
+                break
+
+            has_config_from_namespace = True
+
+            for substmt in stmt.defs.body:
+                if not isinstance(substmt, AssignmentStmt):
+                    continue
+                config.update(self.get_namespace_config_update(substmt))
+            break
+
+        if has_config_kwargs or has_config_from_namespace:
+            if (
+                config.has_alias_generator
+                and not config.allow_population_by_field_name
+                and self.plugin_config.warn_required_dynamic_aliases
+            ):
+                error_required_dynamic_aliases(ctx.api, stmt)
+
         for info in cls.info.mro[1:]:  # 0 is the current class
             if METADATA_KEY not in info.metadata:
                 continue
@@ -333,7 +357,7 @@ class PydanticModelTransformer:
                 continue
 
             lhs = stmt.lvalues[0]
-            if not isinstance(lhs, NameExpr) or not is_valid_field(lhs.name):
+            if not isinstance(lhs, NameExpr) or lhs.name.startswith('_'):
                 continue
 
             if not stmt.new_syntax and self.plugin_config.warn_untyped_fields:
@@ -423,9 +447,9 @@ class PydanticModelTransformer:
         if '__init__' not in ctx.cls.info.names:
             add_method(ctx, '__init__', init_arguments, NoneType())
 
-    def add_construct_method(self, fields: List['PydanticModelField']) -> None:
+    def add_model_construct_method(self, fields: List['PydanticModelField']) -> None:
         """
-        Adds a fully typed `construct` classmethod to the class.
+        Adds a fully typed `model_construct` classmethod to the class.
 
         Similar to the fields-aware __init__ method, but always uses the field names (not aliases),
         and does not treat settings fields as optional.
@@ -447,7 +471,7 @@ class PydanticModelTransformer:
 
         add_method(
             ctx,
-            'construct',
+            'model_construct',
             construct_arguments,
             return_type=self_type,
             self_type=self_type,
@@ -475,32 +499,38 @@ class PydanticModelTransformer:
                 var._fullname = get_fullname(info) + '.' + get_name(var)
                 info.names[get_name(var)] = SymbolTableNode(MDEF, var)
 
-    def get_config_update(self, substmt: AssignmentStmt) -> Optional['ModelConfigData']:
+    def get_namespace_config_update(self, substmt: AssignmentStmt) -> Optional['ModelConfigData']:
         """
         Determines the config update due to a single statement in the Config class definition.
 
         Warns if a tracked config attribute is set to a value the plugin doesn't know how to interpret (e.g., an int)
         """
         lhs = substmt.lvalues[0]
-        if not (isinstance(lhs, NameExpr) and lhs.name in self.tracked_config_fields):
+        if not isinstance(lhs, NameExpr):
             return None
-        if lhs.name == 'extra':
-            if isinstance(substmt.rvalue, StrExpr):
-                forbid_extra = substmt.rvalue.value == 'forbid'
-            elif isinstance(substmt.rvalue, MemberExpr):
-                forbid_extra = substmt.rvalue.name == 'forbid'
+        return self.get_config_update(lhs.name, substmt.rvalue)
+
+    def get_config_update(self, name: str, expr: Expression) -> Optional['ModelConfigData']:
+        if name not in self.tracked_config_fields:
+            return None
+
+        if name == 'extra':
+            if isinstance(expr, StrExpr):
+                forbid_extra = expr.value == 'forbid'
+            elif isinstance(expr, MemberExpr):
+                forbid_extra = expr.name == 'forbid'
             else:
-                error_invalid_config_value(lhs.name, self._ctx.api, substmt)
+                error_invalid_config_value(name, self._ctx.api, expr)
                 return None
             return ModelConfigData(forbid_extra=forbid_extra)
-        if lhs.name == 'alias_generator':
+        if name == 'alias_generator':
             has_alias_generator = True
-            if isinstance(substmt.rvalue, NameExpr) and substmt.rvalue.fullname == 'builtins.None':
+            if isinstance(expr, NameExpr) and expr.fullname == 'builtins.None':
                 has_alias_generator = False
             return ModelConfigData(has_alias_generator=has_alias_generator)
-        if isinstance(substmt.rvalue, NameExpr) and substmt.rvalue.fullname in ('builtins.True', 'builtins.False'):
-            return ModelConfigData(**{lhs.name: substmt.rvalue.fullname == 'builtins.True'})
-        error_invalid_config_value(lhs.name, self._ctx.api, substmt)
+        if isinstance(expr, NameExpr) and expr.fullname in ('builtins.True', 'builtins.False'):
+            return ModelConfigData(**{name: expr.fullname == 'builtins.True'})
+        error_invalid_config_value(name, self._ctx.api, expr)
         return None
 
     @staticmethod
@@ -563,7 +593,7 @@ class PydanticModelTransformer:
         self, fields: List['PydanticModelField'], typed: bool, force_all_optional: bool, use_alias: bool
     ) -> List[Argument]:
         """
-        Helper function used during the construction of the `__init__` and `construct` method signatures.
+        Helper function used during the construction of the `__init__` and `model_construct` method signatures.
 
         Returns a list of mypy Argument instances for use in the generated signatures.
         """
