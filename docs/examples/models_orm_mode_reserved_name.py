@@ -12,10 +12,10 @@ class MyModel(BaseModel):
         orm_mode = True
 
 
-BaseModel = declarative_base()
+Base = declarative_base()
 
 
-class SQLModel(BaseModel):
+class SQLModel(Base):
     __tablename__ = 'my_table'
     id = sa.Column('id', sa.Integer, primary_key=True)
     # 'metadata' is reserved by SQLAlchemy, hence the '_'
@@ -26,5 +26,5 @@ sql_model = SQLModel(metadata_={'key': 'val'}, id=1)
 
 pydantic_model = MyModel.from_orm(sql_model)
 
-print(pydantic_model.dict())
-print(pydantic_model.dict(by_alias=True))
+print(pydantic_model.model_dump())
+print(pydantic_model.model_dump(by_alias=True))

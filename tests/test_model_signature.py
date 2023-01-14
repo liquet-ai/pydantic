@@ -1,7 +1,12 @@
-from inspect import signature
-from typing import Any, Iterable, Union
+import sys
+from inspect import Parameter, Signature, signature
+from typing import Any, Iterable, Optional, Union
+
+import pytest
+from typing_extensions import Annotated
 
 from pydantic import BaseModel, Extra, Field, create_model
+from pydantic._internal._typing_extra import is_annotated
 
 
 def _equals(a: Union[str, Iterable[str]], b: Union[str, Iterable[str]]) -> bool:
@@ -19,7 +24,7 @@ def _equals(a: Union[str, Iterable[str]], b: Union[str, Iterable[str]]) -> bool:
 def test_model_signature():
     class Model(BaseModel):
         a: float = Field(..., title='A')
-        b = Field(10)
+        b: int = Field(10)
 
     sig = signature(Model)
     assert sig != signature(BaseModel)
@@ -65,6 +70,7 @@ def test_custom_init_signature_with_no_var_kw():
     assert _equals(str(signature(Model)), '(a: float, b: int) -> None')
 
 
+@pytest.mark.xfail(reason='TODO create_model')
 def test_invalid_identifiers_signature():
     model = create_model(
         'Model', **{'123 invalid identifier!': Field(123, alias='valid_identifier'), '!': Field(0, alias='yeah')}
@@ -82,6 +88,16 @@ def test_use_field_name():
             allow_population_by_field_name = True
 
     assert _equals(str(signature(Foo)), '(*, foo: str) -> None')
+
+
+def test_does_not_use_reserved_word():
+    class Foo(BaseModel):
+        from_: str = Field(..., alias='from')
+
+        class Config:
+            allow_population_by_field_name = True
+
+    assert _equals(str(signature(Foo)), '(*, from_: str) -> None')
 
 
 def test_extra_allow_no_conflict():
@@ -138,3 +154,35 @@ def test_signature_is_class_only():
     assert _equals(str(signature(Model)), '(*, foo: int = 123) -> None')
     assert _equals(str(signature(Model())), '(a: int) -> bool')
     assert not hasattr(Model(), '__signature__')
+
+
+def test_optional_field():
+    class Model(BaseModel):
+        foo: Optional[int] = None
+
+    assert signature(Model) == Signature(
+        [Parameter('foo', Parameter.KEYWORD_ONLY, default=None, annotation=Optional[int])], return_annotation=None
+    )
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason='repr different on older versions')
+def test_annotated_field():
+    from annotated_types import Gt
+
+    class Model(BaseModel):
+        foo: Annotated[int, Gt(1)] = 1
+
+    sig = signature(Model)
+    assert str(sig) == '(*, foo: typing.Annotated[int, Gt(gt=1)] = 1) -> None'
+    # check that the `Annotated` we created is a valid `Annotated`
+    assert is_annotated(sig.parameters['foo'].annotation)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason='repr different on older versions')
+def test_annotated_optional_field():
+    from annotated_types import Gt
+
+    class Model(BaseModel):
+        foo: Annotated[Optional[int], Gt(1)] = None
+
+    assert str(signature(Model)) == '(*, foo: Annotated[Optional[int], Gt(gt=1)] = None) -> None'

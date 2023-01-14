@@ -1,9 +1,12 @@
+import typing
 from collections import namedtuple
-from typing import Callable as TypingCallable, NamedTuple
+from typing import Callable, NamedTuple
 
 import pytest
+from typing_extensions import Literal, get_origin
 
-from pydantic.typing import Literal, is_namedtuple, is_none_type, is_typeddict
+from pydantic import Field  # noqa: F401
+from pydantic._internal._typing_extra import is_namedtuple, is_none_type, origin_is_union
 
 try:
     from typing import TypedDict as typing_TypedDict
@@ -40,22 +43,6 @@ def test_is_namedtuple():
     assert is_namedtuple(Other) is False
 
 
-@pytest.mark.parametrize('TypedDict', (t for t in ALL_TYPEDDICT_KINDS if t is not None))
-def test_is_typeddict_typing(TypedDict):
-    class Employee(TypedDict):
-        name: str
-        id: int
-
-    assert is_typeddict(Employee) is True
-    assert is_typeddict(TypedDict('Employee', {'name': str, 'id': int})) is True
-
-    class Other(dict):
-        name: str
-        id: int
-
-    assert is_typeddict(Other) is False
-
-
 def test_is_none_type():
     assert is_none_type(Literal[None]) is True
     assert is_none_type(None) is True
@@ -65,4 +52,15 @@ def test_is_none_type():
     # WARNING: It's important to test `typing.Callable` not
     # `collections.abc.Callable` (even with python >= 3.9) as they behave
     # differently
-    assert is_none_type(TypingCallable) is False
+    assert is_none_type(Callable) is False
+
+
+@pytest.mark.parametrize('union_gen', [lambda: typing.Union[int, str], lambda: int | str])
+def test_is_union(union_gen):
+    try:
+        union = union_gen()
+    except TypeError:
+        pytest.skip('not supported in this python version')
+    else:
+        origin = get_origin(union)
+        assert origin_is_union(origin)

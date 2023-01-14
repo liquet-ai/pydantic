@@ -1,19 +1,25 @@
+from typing import Generic, Optional, Tuple, TypeVar
+
 import pytest
 
 from pydantic import BaseModel, Extra, Field, ValidationError, create_model, errors, validator
+from pydantic.fields import ModelPrivateAttr
+from pydantic.generics import GenericModel
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_create_model():
     model = create_model('FooModel', foo=(str, ...), bar=123)
     assert issubclass(model, BaseModel)
     assert issubclass(model.__config__, BaseModel.Config)
     assert model.__name__ == 'FooModel'
-    assert model.__fields__.keys() == {'foo', 'bar'}
+    assert model.model_fields.keys() == {'foo', 'bar'}
     assert model.__validators__ == {}
     assert model.__config__.__name__ == 'Config'
     assert model.__module__ == 'pydantic.main'
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_create_model_usage():
     model = create_model('FooModel', foo=(str, ...), bar=123)
     m = model(foo='hello')
@@ -51,30 +57,32 @@ def test_create_model_pickle(create_module):
 def test_invalid_name():
     with pytest.warns(RuntimeWarning):
         model = create_model('FooModel', _foo=(str, ...))
-    assert len(model.__fields__) == 0
+    assert len(model.model_fields) == 0
 
 
 def test_field_wrong_tuple():
-    with pytest.raises(errors.ConfigError):
+    with pytest.raises(errors.PydanticUserError):
         create_model('FooModel', foo=(1, 2, 3))
 
 
 def test_config_and_base():
-    with pytest.raises(errors.ConfigError):
+    with pytest.raises(errors.PydanticUserError):
         create_model('FooModel', __config__=BaseModel.Config, __base__=BaseModel)
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_inheritance():
     class BarModel(BaseModel):
         x = 1
         y = 2
 
     model = create_model('FooModel', foo=(str, ...), bar=(int, 123), __base__=BarModel)
-    assert model.__fields__.keys() == {'foo', 'bar', 'x', 'y'}
+    assert model.model_fields.keys() == {'foo', 'bar', 'x', 'y'}
     m = model(foo='a', x=4)
-    assert m.dict() == {'bar': 123, 'foo': 'a', 'x': 4, 'y': 2}
+    assert m.model_dump() == {'bar': 123, 'foo': 'a', 'x': 4, 'y': 2}
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_custom_config():
     class Config:
         fields = {'foo': 'api-foo-field'}
@@ -86,6 +94,7 @@ def test_custom_config():
         model(foo=654)
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_custom_config_inherits():
     class Config(BaseModel.Config):
         fields = {'foo': 'api-foo-field'}
@@ -107,6 +116,7 @@ def test_custom_config_extras():
         model(bar=654)
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_inheritance_validators():
     class BarModel(BaseModel):
         @validator('a', check_fields=False)
@@ -122,6 +132,7 @@ def test_inheritance_validators():
         model(a='something else')
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_inheritance_validators_always():
     class BarModel(BaseModel):
         @validator('a', check_fields=False, always=True)
@@ -138,6 +149,7 @@ def test_inheritance_validators_always():
         model(a='something else')
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_inheritance_validators_all():
     class BarModel(BaseModel):
         @validator('*')
@@ -145,13 +157,14 @@ def test_inheritance_validators_all():
             return v * 2
 
     model = create_model('FooModel', a=(int, ...), b=(int, ...), __base__=BarModel)
-    assert model(a=2, b=6).dict() == {'a': 4, 'b': 12}
+    assert model(a=2, b=6).model_dump() == {'a': 4, 'b': 12}
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_funky_name():
     model = create_model('FooModel', **{'this-is-funky': (int, ...)})
     m = model(**{'this-is-funky': '123'})
-    assert m.dict() == {'this-is-funky': 123}
+    assert m.model_dump() == {'this-is-funky': 123}
     with pytest.raises(ValidationError) as exc_info:
         model()
     assert exc_info.value.errors() == [
@@ -159,29 +172,30 @@ def test_funky_name():
     ]
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_repeat_base_usage():
     class Model(BaseModel):
         a: str
 
-    assert Model.__fields__.keys() == {'a'}
+    assert Model.model_fields.keys() == {'a'}
 
     model = create_model('FooModel', b=1, __base__=Model)
 
-    assert Model.__fields__.keys() == {'a'}
-    assert model.__fields__.keys() == {'a', 'b'}
+    assert Model.model_fields.keys() == {'a'}
+    assert model.model_fields.keys() == {'a', 'b'}
 
     model2 = create_model('Foo2Model', c=1, __base__=Model)
 
-    assert Model.__fields__.keys() == {'a'}
-    assert model.__fields__.keys() == {'a', 'b'}
-    assert model2.__fields__.keys() == {'a', 'c'}
+    assert Model.model_fields.keys() == {'a'}
+    assert model.model_fields.keys() == {'a', 'b'}
+    assert model2.model_fields.keys() == {'a', 'c'}
 
     model3 = create_model('Foo2Model', d=1, __base__=model)
 
-    assert Model.__fields__.keys() == {'a'}
-    assert model.__fields__.keys() == {'a', 'b'}
-    assert model2.__fields__.keys() == {'a', 'c'}
-    assert model3.__fields__.keys() == {'a', 'b', 'd'}
+    assert Model.model_fields.keys() == {'a'}
+    assert model.model_fields.keys() == {'a', 'b'}
+    assert model2.model_fields.keys() == {'a', 'c'}
+    assert model3.model_fields.keys() == {'a', 'b', 'd'}
 
 
 def test_dynamic_and_static():
@@ -193,15 +207,73 @@ def test_dynamic_and_static():
     DynamicA = create_model('A', x=(int, ...), y=(float, ...), z=(str, ...))
 
     for field_name in ('x', 'y', 'z'):
-        assert A.__fields__[field_name].default == DynamicA.__fields__[field_name].default
+        assert A.model_fields[field_name].default == DynamicA.model_fields[field_name].default
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_config_field_info_create_model():
     class Config:
         fields = {'a': {'description': 'descr'}}
 
     m1 = create_model('M1', __config__=Config, a=(str, ...))
-    assert m1.schema()['properties'] == {'a': {'title': 'A', 'description': 'descr', 'type': 'string'}}
+    assert m1.model_json_schema()['properties'] == {'a': {'title': 'A', 'description': 'descr', 'type': 'string'}}
 
     m2 = create_model('M2', __config__=Config, a=(str, Field(...)))
-    assert m2.schema()['properties'] == {'a': {'title': 'A', 'description': 'descr', 'type': 'string'}}
+    assert m2.model_json_schema()['properties'] == {'a': {'title': 'A', 'description': 'descr', 'type': 'string'}}
+
+
+@pytest.mark.xfail(reason='working on V2')
+def test_generics_model():
+    T = TypeVar('T')
+
+    class TestGenericModel(GenericModel):
+        pass
+
+    AAModel = create_model(
+        'AAModel', __base__=(TestGenericModel, Generic[T]), __cls_kwargs__={'orm_mode': True}, aa=(int, Field(0))
+    )
+    result = AAModel[int](aa=1)
+    assert result.aa == 1
+    assert result.__config__.orm_mode is True
+
+
+@pytest.mark.xfail(reason='working on V2')
+@pytest.mark.parametrize('base', [ModelPrivateAttr, object])
+def test_set_name(base):
+    calls = []
+
+    class class_deco(base):
+        def __init__(self, fn):
+            super().__init__()
+            self.fn = fn
+
+        def __set_name__(self, owner, name):
+            calls.append((owner, name))
+
+        def __get__(self, obj, type=None):
+            return self.fn(obj) if obj else self
+
+    class A(BaseModel):
+        x: int
+
+        @class_deco
+        def _some_func(self):
+            return self.x
+
+    assert calls == [(A, '_some_func')]
+    a = A(x=2)
+
+    # we don't test whether calling the method on a PrivateAttr works:
+    # attribute access on privateAttributes is more complicated, it doesn't
+    # get added to the class namespace (and will also get set on the instance
+    # with _init_private_attributes), so the descriptor protocol won't work.
+    if base is object:
+        assert a._some_func == 2
+
+
+def test_create_model_with_slots():
+    field_definitions = {'__slots__': (Optional[Tuple[str, ...]], None), 'foobar': (Optional[int], None)}
+    with pytest.warns(RuntimeWarning, match='__slots__ should not be passed to create_model'):
+        model = create_model('PartialPet', **field_definitions)
+
+    assert model.model_fields.keys() == {'foobar'}

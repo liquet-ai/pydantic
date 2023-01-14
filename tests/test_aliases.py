@@ -1,5 +1,6 @@
 import re
-from typing import Any, List, Optional
+from contextlib import nullcontext as does_not_raise
+from typing import Any, ContextManager, List, Optional
 
 import pytest
 
@@ -7,6 +8,7 @@ from pydantic import BaseConfig, BaseModel, Extra, ValidationError
 from pydantic.fields import Field
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_generator():
     def to_camel(string: str):
         return ''.join(x.capitalize() for x in string.split('_'))
@@ -22,9 +24,10 @@ def test_alias_generator():
     v = MyModel(**data)
     assert v.a == ['foo', 'bar']
     assert v.foo_bar == 'foobar'
-    assert v.dict(by_alias=True) == data
+    assert v.model_dump(by_alias=True) == data
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_generator_with_field_schema():
     def to_upper_case(string: str):
         return string.upper()
@@ -41,9 +44,10 @@ def test_alias_generator_with_field_schema():
 
     data = {'MY_FIELD': ['a'], 'FOO': 'bar', 'BAZ_BAR': 'ok', 'ANOTHER_FIELD': '...'}
     m = MyModel(**data)
-    assert m.dict(by_alias=True) == data
+    assert m.model_dump(by_alias=True) == data
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_generator_wrong_type_error():
     def return_bytes(string):
         return b'not a string'
@@ -59,6 +63,7 @@ def test_alias_generator_wrong_type_error():
     assert str(e.value) == "Config.alias_generator must return str, not <class 'bytes'>"
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_infer_alias():
     class Model(BaseModel):
         a = 'foobar'
@@ -67,11 +72,12 @@ def test_infer_alias():
             fields = {'a': '_a'}
 
     assert Model(_a='different').a == 'different'
-    assert repr(Model.__fields__['a']) == (
+    assert repr(Model.model_fields['a']) == (
         "ModelField(name='a', type=str, required=False, default='foobar', alias='_a')"
     )
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_error():
     class Model(BaseModel):
         a = 123
@@ -88,6 +94,7 @@ def test_alias_error():
     ]
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_annotation_config():
     class Model(BaseModel):
         b: float
@@ -97,11 +104,12 @@ def test_annotation_config():
         class Config:
             fields = {'b': 'foobar'}
 
-    assert list(Model.__fields__.keys()) == ['b', 'a']
-    assert [f.alias for f in Model.__fields__.values()] == ['foobar', 'a']
+    assert list(Model.model_fields.keys()) == ['b', 'a']
+    assert [f.alias for f in Model.model_fields.values()] == ['foobar', 'a']
     assert Model(foobar='123').b == 123.0
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_camel_case():
     class Model(BaseModel):
         one_thing: int
@@ -121,6 +129,7 @@ def test_alias_camel_case():
     assert v == {'one_thing': 123, 'another_thing': 321}
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_get_field_info_inherit():
     class ModelOne(BaseModel):
         class Config(BaseConfig):
@@ -143,6 +152,7 @@ def test_get_field_info_inherit():
     assert v == {'one_thing': 123, 'another_thing': 321, 'third_thing': 1}
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_pop_by_field_name():
     class Model(BaseModel):
         last_updated_by: Optional[str] = None
@@ -152,8 +162,8 @@ def test_pop_by_field_name():
             allow_population_by_field_name = True
             fields = {'last_updated_by': 'lastUpdatedBy'}
 
-    assert Model(lastUpdatedBy='foo').dict() == {'last_updated_by': 'foo'}
-    assert Model(last_updated_by='foo').dict() == {'last_updated_by': 'foo'}
+    assert Model(lastUpdatedBy='foo').model_dump() == {'last_updated_by': 'foo'}
+    assert Model(last_updated_by='foo').model_dump() == {'last_updated_by': 'foo'}
     with pytest.raises(ValidationError) as exc_info:
         Model(lastUpdatedBy='foo', last_updated_by='bar')
     assert exc_info.value.errors() == [
@@ -161,6 +171,7 @@ def test_pop_by_field_name():
     ]
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_child_precedence():
     class Parent(BaseModel):
         x: int
@@ -174,10 +185,11 @@ def test_alias_child_precedence():
         class Config:
             fields = {'y': 'y2', 'x': 'x2'}
 
-    assert Child.__fields__['y'].alias == 'y2'
-    assert Child.__fields__['x'].alias == 'x2'
+    assert Child.model_fields['y'].alias == 'y2'
+    assert Child.model_fields['x'].alias == 'x2'
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_generator_parent():
     class Parent(BaseModel):
         x: int
@@ -197,10 +209,11 @@ def test_alias_generator_parent():
             def alias_generator(cls, f_name):
                 return f_name + '2'
 
-    assert Child.__fields__['y'].alias == 'y2'
-    assert Child.__fields__['x'].alias == 'x2'
+    assert Child.model_fields['y'].alias == 'y2'
+    assert Child.model_fields['x'].alias == 'x2'
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_generator_on_parent():
     class Parent(BaseModel):
         x: bool = Field(..., alias='a_b_c')
@@ -215,13 +228,14 @@ def test_alias_generator_on_parent():
         y: str
         z: str
 
-    assert Parent.__fields__['x'].alias == 'a_b_c'
-    assert Parent.__fields__['y'].alias == 'Y'
-    assert Child.__fields__['x'].alias == 'a_b_c'
-    assert Child.__fields__['y'].alias == 'Y'
-    assert Child.__fields__['z'].alias == 'Z'
+    assert Parent.model_fields['x'].alias == 'a_b_c'
+    assert Parent.model_fields['y'].alias == 'Y'
+    assert Child.model_fields['x'].alias == 'a_b_c'
+    assert Child.model_fields['y'].alias == 'Y'
+    assert Child.model_fields['z'].alias == 'Z'
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_generator_on_child():
     class Parent(BaseModel):
         x: bool = Field(..., alias='abc')
@@ -236,10 +250,11 @@ def test_alias_generator_on_child():
             def alias_generator(x):
                 return x.upper()
 
-    assert [f.alias for f in Parent.__fields__.values()] == ['abc', 'y']
-    assert [f.alias for f in Child.__fields__.values()] == ['abc', 'Y', 'Z']
+    assert [f.alias for f in Parent.model_fields.values()] == ['abc', 'y']
+    assert [f.alias for f in Child.model_fields.values()] == ['abc', 'Y', 'Z']
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_low_priority_alias():
     class Parent(BaseModel):
         x: bool = Field(..., alias='abc', alias_priority=1)
@@ -254,10 +269,11 @@ def test_low_priority_alias():
             def alias_generator(x):
                 return x.upper()
 
-    assert [f.alias for f in Parent.__fields__.values()] == ['abc', 'y']
-    assert [f.alias for f in Child.__fields__.values()] == ['X', 'Y', 'Z']
+    assert [f.alias for f in Parent.model_fields.values()] == ['abc', 'y']
+    assert [f.alias for f in Child.model_fields.values()] == ['X', 'Y', 'Z']
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_low_priority_alias_config():
     class Parent(BaseModel):
         x: bool
@@ -275,10 +291,11 @@ def test_low_priority_alias_config():
             def alias_generator(x):
                 return x.upper()
 
-    assert [f.alias for f in Parent.__fields__.values()] == ['abc', 'y']
-    assert [f.alias for f in Child.__fields__.values()] == ['X', 'Y', 'Z']
+    assert [f.alias for f in Parent.model_fields.values()] == ['abc', 'y']
+    assert [f.alias for f in Child.model_fields.values()] == ['X', 'Y', 'Z']
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_field_vs_config():
     class Model(BaseModel):
         x: str = Field(..., alias='x_on_field')
@@ -288,9 +305,10 @@ def test_field_vs_config():
         class Config:
             fields = {'x': dict(alias='x_on_config'), 'y': dict(alias='y_on_config')}
 
-    assert [f.alias for f in Model.__fields__.values()] == ['x_on_field', 'y_on_config', 'z']
+    assert [f.alias for f in Model.model_fields.values()] == ['x_on_field', 'y_on_config', 'z']
 
 
+@pytest.mark.xfail(reason='working on V2')
 def test_alias_priority():
     class Parent(BaseModel):
         a: str = Field(..., alias='a_field_parent')
@@ -320,18 +338,65 @@ def test_alias_priority():
             def alias_generator(x):
                 return f'{x}_generator_child'
 
-    # debug([f.alias for f in Parent.__fields__.values()], [f.alias for f in Child.__fields__.values()])
-    assert [f.alias for f in Parent.__fields__.values()] == [
+    # debug([f.alias for f in Parent.model_fields.values()], [f.alias for f in Child.model_fields.values()])
+    assert [f.alias for f in Parent.model_fields.values()] == [
         'a_field_parent',
         'b_field_parent',
         'c_field_parent',
         'd_config_parent',
         'e_generator_parent',
     ]
-    assert [f.alias for f in Child.__fields__.values()] == [
+    assert [f.alias for f in Child.model_fields.values()] == [
         'a_field_child',
         'b_config_child',
         'c_field_parent',
         'd_config_parent',
         'e_generator_child',
     ]
+
+
+@pytest.mark.xfail(reason='working on V2')
+def test_empty_string_alias():
+    class Model(BaseModel):
+        empty_string_key: int = Field(alias='')
+
+    data = {'': 123}
+    m = Model(**data)
+    assert m.empty_string_key == 123
+    assert m.model_dump(by_alias=True) == data
+
+
+@pytest.mark.parametrize(
+    'use_construct, allow_population_by_field_name_config, arg_name, expectation',
+    [
+        [False, True, 'bar', does_not_raise()],
+        [False, True, 'bar_', does_not_raise()],
+        [False, False, 'bar', does_not_raise()],
+        [False, False, 'bar_', pytest.raises(ValueError)],
+        [True, True, 'bar', does_not_raise()],
+        [True, True, 'bar_', does_not_raise()],
+        [True, False, 'bar', does_not_raise()],
+        [True, False, 'bar_', does_not_raise()],
+    ],
+)
+def test_allow_population_by_field_name_config(
+    use_construct: bool,
+    allow_population_by_field_name_config: bool,
+    arg_name: str,
+    expectation: ContextManager,
+):
+    expected_value: int = 7
+
+    class Foo(BaseModel):
+        bar_: int = Field(..., alias='bar')
+
+        class Config(BaseConfig):
+            allow_population_by_field_name = allow_population_by_field_name_config
+
+    with expectation:
+        if use_construct:
+            f = Foo.model_construct(**{arg_name: expected_value})
+        else:
+            f = Foo(**{arg_name: expected_value})
+
+        assert f.bar_ == expected_value

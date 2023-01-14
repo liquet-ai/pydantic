@@ -1,4 +1,6 @@
 """
+THIS IS A MESS AND NEEDS TO BE REWRITTEN, SORRY ZAC.
+
 Register Hypothesis strategies for Pydantic custom types.
 
 This enables fully-automatic generation of test data for most Pydantic classes.
@@ -10,7 +12,7 @@ Pydantic is installed.  See also:
 https://hypothesis.readthedocs.io/en/latest/strategies.html#registering-strategies-via-setuptools-entry-points
 https://hypothesis.readthedocs.io/en/latest/data.html#hypothesis.strategies.register_type_strategy
 https://hypothesis.readthedocs.io/en/latest/strategies.html#interaction-with-pytest-cov
-https://pydantic-docs.helpmanual.io/usage/types/#pydantic-types
+https://docs.pydantic.dev/usage/types/#pydantic-types
 
 Note that because our motivation is to *improve user experience*, the strategies
 are always sound (never generate invalid data) but sacrifice completeness for
@@ -23,17 +25,20 @@ to generate instances of the builtin `int` type which match the constraints.
 """
 
 import contextlib
+import datetime
 import ipaddress
 import json
 import math
 from fractions import Fraction
-from typing import Callable, Dict, Type, Union, cast, overload
+from typing import Callable, Dict, Type, TypeVar, Union, overload
 
 import hypothesis.strategies as st
 
 import pydantic
 import pydantic.color
 import pydantic.types
+
+from ._internal._utils import lenient_issubclass
 
 # FilePath and DirectoryPath are explicitly unsupported, as we'd have to create
 # them on-disk, and that's unsafe in general without being told *where* to do so.
@@ -74,13 +79,13 @@ else:
         ),
     )
 
-# PyObject - dotted names, in this case taken from the math module.
-st.register_type_strategy(
-    pydantic.PyObject,  # type: ignore[arg-type]
-    st.sampled_from(
-        [cast(pydantic.PyObject, f'math.{name}') for name in sorted(vars(math)) if not name.startswith('_')]
-    ),
-)
+# # PyObject - dotted names, in this case taken from the math module.
+# st.register_type_strategy(
+#     pydantic.PyObject,  # type: ignore[arg-type]
+#     st.sampled_from(
+#         [cast(pydantic.PyObject, f'math.{name}') for name in sorted(vars(math)) if not name.startswith('_')]
+#     ),
+# )
 
 # CSS3 Colors; as name, hex, rgb(a) tuples or strings, or hsl strings
 _color_regexes = (
@@ -139,10 +144,10 @@ st.register_type_strategy(
 )
 
 # UUIDs
-st.register_type_strategy(pydantic.UUID1, st.uuids(version=1))
-st.register_type_strategy(pydantic.UUID3, st.uuids(version=3))
-st.register_type_strategy(pydantic.UUID4, st.uuids(version=4))
-st.register_type_strategy(pydantic.UUID5, st.uuids(version=5))
+# st.register_type_strategy(pydantic.UUID1, st.uuids(version=1))
+# st.register_type_strategy(pydantic.UUID3, st.uuids(version=3))
+# st.register_type_strategy(pydantic.UUID4, st.uuids(version=4))
+# st.register_type_strategy(pydantic.UUID5, st.uuids(version=5))
 
 # Secrets
 st.register_type_strategy(pydantic.SecretBytes, st.binary().map(pydantic.SecretBytes))
@@ -162,8 +167,8 @@ st.register_type_strategy(
 # We hook into the con***() functions and the ConstrainedNumberMeta metaclass,
 # so here we only have to register subclasses for other constrained types which
 # don't go via those mechanisms.  Then there are the registration hooks below.
-st.register_type_strategy(pydantic.StrictBool, st.booleans())
-st.register_type_strategy(pydantic.StrictStr, st.text())
+# st.register_type_strategy(pydantic.StrictBool, st.booleans())
+# st.register_type_strategy(pydantic.StrictStr, st.text())
 
 
 # Constrained-type resolver functions
@@ -172,34 +177,33 @@ st.register_type_strategy(pydantic.StrictStr, st.text())
 # satisfying strategy.  First up, the machinery for tracking resolver functions:
 
 RESOLVERS: Dict[type, Callable[[type], st.SearchStrategy]] = {}  # type: ignore[type-arg]
+T = TypeVar('T')
 
 
 @overload
-def _registered(typ: Type[pydantic.types.T]) -> Type[pydantic.types.T]:
+def _registered(typ: Type[T]) -> Type[T]:
     pass
 
 
 @overload
-def _registered(typ: pydantic.types.ConstrainedNumberMeta) -> pydantic.types.ConstrainedNumberMeta:
+def _registered(typ: pydantic.types) -> pydantic.types:
     pass
 
 
-def _registered(
-    typ: Union[Type[pydantic.types.T], pydantic.types.ConstrainedNumberMeta]
-) -> Union[Type[pydantic.types.T], pydantic.types.ConstrainedNumberMeta]:
+def _registered(typ: Union[Type[T]]) -> Union[Type[T]]:
     # This function replaces the version in `pydantic.types`, in order to
     # effect the registration of new constrained types so that Hypothesis
     # can generate valid examples.
     pydantic.types._DEFINED_TYPES.add(typ)
     for supertype, resolver in RESOLVERS.items():
         if issubclass(typ, supertype):
-            st.register_type_strategy(typ, resolver(typ))  # type: ignore
+            st.register_type_strategy(typ, resolver(typ))
             return typ
     raise NotImplementedError(f'Unknown type {typ!r} has no resolver to register')  # pragma: no cover
 
 
 def resolves(
-    typ: Union[type, pydantic.types.ConstrainedNumberMeta]
+    typ: Union[type],
 ) -> Callable[[Callable[..., st.SearchStrategy]], Callable[..., st.SearchStrategy]]:  # type: ignore[type-arg]
     def inner(f):  # type: ignore
         assert f not in RESOLVERS
@@ -212,7 +216,7 @@ def resolves(
 # Type-to-strategy resolver functions
 
 
-@resolves(pydantic.JsonWrapper)
+# @resolves(pydantic.JsonWrapper)
 def resolve_json(cls):  # type: ignore[no-untyped-def]
     try:
         inner = st.none() if cls.inner_type is None else st.from_type(cls.inner_type)
@@ -222,8 +226,9 @@ def resolve_json(cls):  # type: ignore[no-untyped-def]
             base=st.one_of(st.none(), st.booleans(), st.integers(), finite, st.text()),
             extend=lambda x: st.lists(x) | st.dictionaries(st.text(), x),  # type: ignore
         )
+    inner_type = getattr(cls, 'inner_type', None)
     return st.builds(
-        json.dumps,
+        cls.inner_type.json if lenient_issubclass(inner_type, pydantic.BaseModel) else json.dumps,
         inner,
         ensure_ascii=st.booleans(),
         indent=st.none() | st.integers(0, 16),
@@ -231,7 +236,7 @@ def resolve_json(cls):  # type: ignore[no-untyped-def]
     )
 
 
-@resolves(pydantic.ConstrainedBytes)
+# @resolves(pydantic.ConstrainedBytes)
 def resolve_conbytes(cls):  # type: ignore[no-untyped-def]  # pragma: no cover
     min_size = cls.min_length or 0
     max_size = cls.max_length
@@ -252,7 +257,7 @@ def resolve_conbytes(cls):  # type: ignore[no-untyped-def]  # pragma: no cover
     return st.from_regex(pattern.encode(), fullmatch=True)
 
 
-@resolves(pydantic.ConstrainedDecimal)
+# @resolves(pydantic.ConstrainedDecimal)
 def resolve_condecimal(cls):  # type: ignore[no-untyped-def]
     min_value = cls.ge
     max_value = cls.le
@@ -270,7 +275,7 @@ def resolve_condecimal(cls):  # type: ignore[no-untyped-def]
     return s
 
 
-@resolves(pydantic.ConstrainedFloat)
+# @resolves(pydantic.ConstrainedFloat)
 def resolve_confloat(cls):  # type: ignore[no-untyped-def]
     min_value = cls.ge
     max_value = cls.le
@@ -302,7 +307,7 @@ def resolve_confloat(cls):  # type: ignore[no-untyped-def]
     return st.integers(min_value, max_value).map(lambda x: x * cls.multiple_of)
 
 
-@resolves(pydantic.ConstrainedInt)
+# @resolves(pydantic.ConstrainedInt)
 def resolve_conint(cls):  # type: ignore[no-untyped-def]
     min_value = cls.ge
     max_value = cls.le
@@ -325,7 +330,26 @@ def resolve_conint(cls):  # type: ignore[no-untyped-def]
     return st.integers(min_value, max_value).map(lambda x: x * cls.multiple_of)
 
 
-@resolves(pydantic.ConstrainedStr)
+# @resolves(pydantic.ConstrainedDate)
+def resolve_condate(cls):  # type: ignore[no-untyped-def]
+    if cls.ge is not None:
+        assert cls.gt is None, 'Set `gt` or `ge`, but not both'
+        min_value = cls.ge
+    elif cls.gt is not None:
+        min_value = cls.gt + datetime.timedelta(days=1)
+    else:
+        min_value = datetime.date.min
+    if cls.le is not None:
+        assert cls.lt is None, 'Set `lt` or `le`, but not both'
+        max_value = cls.le
+    elif cls.lt is not None:
+        max_value = cls.lt - datetime.timedelta(days=1)
+    else:
+        max_value = datetime.date.max
+    return st.dates(min_value, max_value)
+
+
+# @resolves(pydantic.ConstrainedStr)
 def resolve_constr(cls):  # type: ignore[no-untyped-def]  # pragma: no cover
     min_size = cls.min_length or 0
     max_size = cls.max_length
@@ -358,7 +382,7 @@ def resolve_constr(cls):  # type: ignore[no-untyped-def]  # pragma: no cover
 
 
 # Finally, register all previously-defined types, and patch in our new function
-for typ in list(pydantic.types._DEFINED_TYPES):
-    _registered(typ)
+# for typ in list(pydantic.types._DEFINED_TYPES):
+#     _registered(typ)
 pydantic.types._registered = _registered
 st.register_type_strategy(pydantic.Json, resolve_json)

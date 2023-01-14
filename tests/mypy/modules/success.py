@@ -3,28 +3,27 @@ Test pydantic's compliance with mypy.
 
 Do a little skipping about with types to demonstrate its usage.
 """
-import json
 import os
 from datetime import date, datetime, timedelta
 from pathlib import Path, PurePath
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, ForwardRef, Generic, List, Optional, Type, TypeVar
 from uuid import UUID
 
-from typing_extensions import TypedDict
+from pydantic_core import Url
+from typing_extensions import Annotated, TypedDict
 
 from pydantic import (
     UUID1,
     BaseConfig,
     BaseModel,
-    BaseSettings,
     DirectoryPath,
     Extra,
     FilePath,
     FutureDate,
+    ImportString,
     Json,
     NegativeFloat,
     NegativeInt,
-    NoneStr,
     NonNegativeFloat,
     NonNegativeInt,
     NonPositiveFloat,
@@ -32,22 +31,18 @@ from pydantic import (
     PastDate,
     PositiveFloat,
     PositiveInt,
-    PyObject,
     StrictBool,
     StrictBytes,
     StrictFloat,
     StrictInt,
     StrictStr,
-    create_model,
-    create_model_from_typeddict,
+    UrlConstraints,
     root_validator,
-    stricturl,
     validate_arguments,
     validator,
 )
 from pydantic.fields import Field, PrivateAttr
 from pydantic.generics import GenericModel
-from pydantic.typing import ForwardRef
 
 
 class Flags(BaseModel):
@@ -59,8 +54,8 @@ class Flags(BaseModel):
 
 class Model(BaseModel):
     age: int
-    first_name = 'John'
-    last_name: NoneStr = None
+    first_name: str = 'John'
+    last_name: Optional[str] = None
     signup_ts: Optional[datetime] = None
     list_of_ints: List[int]
 
@@ -73,7 +68,7 @@ class Model(BaseModel):
     def root_check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         return values
 
-    @root_validator(pre=True, allow_reuse=False, skip_on_failure=False)
+    @root_validator(mode='before', allow_reuse=False)
     def pre_root_check(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         return values
 
@@ -108,7 +103,7 @@ assert day_of_week(m.signup_ts) == 3
 
 
 data = {'age': 10, 'first_name': 'Alena', 'last_name': 'Sousova', 'list_of_ints': [410]}
-m_from_obj = Model.parse_obj(data)
+m_from_obj = Model.model_validate(data)
 
 assert isinstance(m_from_obj, Model)
 assert m_from_obj.age == 10
@@ -116,17 +111,9 @@ assert m_from_obj.first_name == data['first_name']
 assert m_from_obj.last_name == data['last_name']
 assert m_from_obj.list_of_ints == data['list_of_ints']
 
-m_from_raw = Model.parse_raw(json.dumps(data))
-
-assert isinstance(m_from_raw, Model)
-assert m_from_raw.age == m_from_obj.age
-assert m_from_raw.first_name == m_from_obj.first_name
-assert m_from_raw.last_name == m_from_obj.last_name
-assert m_from_raw.list_of_ints == m_from_obj.list_of_ints
-
 m_copy = m_from_obj.copy()
 
-assert isinstance(m_from_raw, Model)
+assert isinstance(m_copy, Model)
 assert m_copy.age == m_from_obj.age
 assert m_copy.first_name == m_from_obj.first_name
 assert m_copy.last_name == m_from_obj.last_name
@@ -155,7 +142,7 @@ assert model_instance.payload.list_of_ints == [1, 2, 3, 4]
 
 class WithField(BaseModel):
     age: int
-    first_name: str = Field('John', const=True)
+    first_name: str = Field('John', max_length=42)
 
 
 # simple decorator
@@ -186,8 +173,8 @@ FooRef = ForwardRef('Foo')
 
 
 class MyConf(BaseModel):
-    str_pyobject: PyObject = Field('datetime.date')
-    callable_pyobject: PyObject = Field(date)
+    str_pyobject: ImportString[Type[date]] = Field('datetime.date')
+    callable_pyobject: ImportString[Type[date]] = Field(date)
 
 
 conf = MyConf()
@@ -218,9 +205,9 @@ class PydanticTypes(BaseModel):
     my_strict_bytes: StrictBytes = b'pika'
     # String
     my_strict_str: StrictStr = 'pika'
-    # PyObject
-    my_pyobject_str: PyObject = 'datetime.date'  # type: ignore
-    my_pyobject_callable: PyObject = date
+    # ImportString
+    import_string_str: ImportString[Any] = 'datetime.date'
+    import_string_callable: ImportString[Any] = date
     # UUID
     my_uuid1: UUID1 = UUID('a8098c1a-f86e-11da-bd1a-00112444be1e')
     my_uuid1_str: UUID1 = 'a8098c1a-f86e-11da-bd1a-00112444be1e'  # type: ignore
@@ -230,7 +217,8 @@ class PydanticTypes(BaseModel):
     my_dir_path: DirectoryPath = Path('.')
     my_dir_path_str: DirectoryPath = '.'  # type: ignore
     # Json
-    my_json: Json = '{"hello": "world"}'
+    my_json: Json[Dict[str, str]] = '{"hello": "world"}'  # type: ignore
+    my_json_list: Json[List[str]] = '["hello", "world"]'  # type: ignore
     # Date
     my_past_date: PastDate = date.today() - timedelta(1)
     my_future_date: FutureDate = date.today() + timedelta(1)
@@ -240,18 +228,26 @@ class PydanticTypes(BaseModel):
 
 
 validated = PydanticTypes()
-validated.my_pyobject_str(2021, 1, 1)
-validated.my_pyobject_callable(2021, 1, 1)
+validated.import_string_str(2021, 1, 1)
+validated.import_string_callable(2021, 1, 1)
 validated.my_uuid1.hex
 validated.my_uuid1_str.hex
 validated.my_file_path.absolute()
 validated.my_file_path_str.absolute()
 validated.my_dir_path.absolute()
 validated.my_dir_path_str.absolute()
+validated.my_json['hello'].capitalize()
+validated.my_json_list[0].capitalize()
 
-stricturl(allowed_schemes={'http'})
-stricturl(allowed_schemes=frozenset({'http'}))
-stricturl(allowed_schemes=('s3', 's3n', 's3a'))
+
+class UrlModel(BaseModel):
+    x: Annotated[Url, UrlConstraints(allowed_schemes=['http'])] = Field(None)
+    y: Annotated[Url, UrlConstraints(allowed_schemes=['http'])] = Field(None)
+    z: Annotated[Url, UrlConstraints(allowed_schemes=['s3', 's3n', 's3a'])] = Field(None)
+
+
+url_model = UrlModel(x='http://example.com')
+assert url_model.x.host == 'example.com'
 
 
 class SomeDict(TypedDict):
@@ -271,10 +267,6 @@ class Config(BaseConfig):
     max_anystr_length = 1234
 
 
-class Settings(BaseSettings):
-    ...
-
-
 class CustomPath(PurePath):
     def __init__(self, *args: str):
         self.path = os.path.join(*args)
@@ -283,10 +275,5 @@ class CustomPath(PurePath):
         return f'a/custom/{self.path}'
 
 
-def dont_check_path_existence() -> None:
-    Settings(_env_file='a/path', _secrets_dir='a/path')
-    Settings(_env_file=CustomPath('a/path'), _secrets_dir=CustomPath('a/path'))
-
-
-create_model_from_typeddict(SomeDict)(**obj)
-DynamicModel = create_model('DynamicModel')
+# TODO:
+# DynamicModel = create_model('DynamicModel')

@@ -4,9 +4,9 @@ Installation is as simple as:
 pip install pydantic
 ```
 
-*pydantic* has no required dependencies except python 3.7, 3.8, 3.9 or 3.10 and
+*pydantic* has no required dependencies except Python 3.7, 3.8, 3.9, 3.10 or 3.11 and
 [`typing-extensions`](https://pypi.org/project/typing-extensions/).
-If you've got python 3.7+ and `pip` installed, you're good to go.
+If you've got Python 3.7+ and `pip` installed, you're good to go.
 
 Pydantic is also available on [conda](https://www.anaconda.com) under the [conda-forge](https://conda-forge.org)
 channel:
@@ -17,10 +17,9 @@ conda install pydantic -c conda-forge
 
 ## Compiled with Cython
 
-*pydantic* can optionally be compiled with [cython](https://cython.org/) which should give a 30-50% performance improvement. 
+*pydantic* can optionally be compiled with [cython](https://cython.org/) which should give a 30-50% performance improvement.
 
 By default `pip install` provides optimized binaries via [PyPI](https://pypi.org/project/pydantic/#files) for Linux, MacOS and 64bit Windows.
-
 
 If you're installing manually, install `cython` before installing *pydantic* and compilation should happen automatically.
 
@@ -52,29 +51,22 @@ CFLAGS="-Os -g0 -s" pip install \
 
 ## Optional dependencies
 
-*pydantic* has two optional dependencies:
+*pydantic* has one optional dependencies:
 
 * If you require email validation you can add [email-validator](https://github.com/JoshData/python-email-validator)
-* [dotenv file support](usage/settings.md#dotenv-env-support) with `Settings` requires
-  [python-dotenv](https://pypi.org/project/python-dotenv)
 
 To install these along with *pydantic*:
 ```bash
 pip install pydantic[email]
-# or
-pip install pydantic[dotenv]
-# or just
-pip install pydantic[email,dotenv]
 ```
 
-Of course, you can also install these requirements manually with `pip install email-validator` and/or `pip install`.
-
+Of course, you can also install these requirements manually with `pip install email-validator`.
 
 ## Install from repository
 
 And if you prefer to install *pydantic* directly from the repository:
 ```bash
-pip install git+git://github.com/samuelcolvin/pydantic@master#egg=pydantic
+pip install git+git://github.com/pydantic/pydantic@main#egg=pydantic
 # or with extras
-pip install git+git://github.com/samuelcolvin/pydantic@master#egg=pydantic[email,dotenv]
+pip install git+git://github.com/pydantic/pydantic@main#egg=pydantic[email]
 ```

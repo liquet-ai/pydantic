@@ -1,21 +1,15 @@
 import importlib
 import inspect
-import os
+import re
 import secrets
 import sys
 import textwrap
+from dataclasses import dataclass
 from types import FunctionType
+from typing import Any, Optional
 
 import pytest
 from _pytest.assertion.rewrite import AssertionRewritingHook
-
-# See https://hypothesis.readthedocs.io/en/latest/strategies.html#interaction-with-pytest-cov
-try:
-    from hypothesis import given  # noqa
-except ImportError:
-    pytest_plugins = []
-else:
-    pytest_plugins = ['hypothesis.extra.pytestplugin']
 
 
 def _extract_source_code_from_function(function):
@@ -39,28 +33,6 @@ def _create_module_file(code, tmp_path, name):
     path = tmp_path / f'{name}.py'
     path.write_text(code)
     return name, str(path)
-
-
-class SetEnv:
-    def __init__(self):
-        self.envars = set()
-
-    def set(self, name, value):
-        self.envars.add(name)
-        os.environ[name] = value
-
-    def clear(self):
-        for n in self.envars:
-            os.environ.pop(n)
-
-
-@pytest.fixture
-def env():
-    setenv = SetEnv()
-
-    yield setenv
-
-    setenv.clear()
 
 
 @pytest.fixture
@@ -93,3 +65,18 @@ def create_module(tmp_path, request):
         return module
 
     return run
+
+
+@dataclass
+class Err:
+    message: str
+    errors: Optional[Any] = None
+
+    def __repr__(self):
+        if self.errors:
+            return f'Err({self.message!r}, errors={self.errors!r})'
+        else:
+            return f'Err({self.message!r})'
+
+    def message_escaped(self):
+        return re.escape(self.message)

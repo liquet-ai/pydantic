@@ -1,62 +1,54 @@
 .DEFAULT_GOAL := all
-isort = isort pydantic tests
-black = black -S -l 120 --target-version py38 pydantic tests
-
-.PHONY: install-linting
-install-linting:
-	pip install -r tests/requirements-linting.txt
-	pre-commit install
-
-.PHONY: install-pydantic
-install-pydantic:
-	python -m pip install -U wheel pip
-	pip install -r requirements.txt
-	SKIP_CYTHON=1 pip install -e .
-
-.PHONY: install-testing
-install-testing: install-pydantic
-	pip install -r tests/requirements-testing.txt
-
-.PHONY: install-docs
-install-docs: install-pydantic
-	pip install -U -r docs/requirements.txt
+sources = pydantic tests docs/build
 
 .PHONY: install
-install: install-testing install-linting install-docs
-	@echo 'installed development requirements'
+install:
+	python -m pip install -U pip
+	pip install -r requirements/all.txt
+	pip install -e .
 
-.PHONY: build-trace
-build-trace:
-	python setup.py build_ext --force --inplace --define CYTHON_TRACE
-
-.PHONY: build
-build:
-	python setup.py build_ext --inplace
+.PHONY: refresh-lockfiles
+refresh-lockfiles:
+	@echo "Updating requirements/*.txt files using pip-compile"
+	find requirements/ -name '*.txt' ! -name 'all.txt' -type f -delete
+	pip-compile -q --resolver backtracking -o requirements/docs.txt requirements/docs.in
+	pip-compile -q --resolver backtracking -o requirements/linting.txt requirements/linting.in
+	pip-compile -q --resolver backtracking -o requirements/testing.txt requirements/testing.in
+	pip-compile -q --resolver backtracking -o requirements/testing-extra.txt requirements/testing-extra.in
+	pip-compile -q --resolver backtracking -o requirements/pyproject-min.txt pyproject.toml
+	pip-compile -q --resolver backtracking -o requirements/pyproject-all.txt pyproject.toml --extra=email
+	pip install --dry-run -r requirements/all.txt
 
 .PHONY: format
 format:
-	$(isort)
-	$(black)
+	isort $(sources)
+	black $(sources)
 
 .PHONY: lint
 lint:
-	flake8 pydantic/ tests/
-	$(isort) --check-only --df
-	$(black) --check --diff
+	ruff $(sources)
+	isort $(sources) --check-only --df
+	black $(sources) --check --diff
 
-.PHONY: check-dist
-check-dist:
-	python setup.py check -ms
-	SKIP_CYTHON=1 python setup.py sdist
-	twine check dist/*
+.PHONY: lint-flake8
+lint-flake8:
+	flake8 $(sources)
 
 .PHONY: mypy
 mypy:
-	mypy pydantic
+	mypy pydantic docs/build --disable-recursive-aliases
+
+.PHONY: pyupgrade
+pyupgrade:
+	pyupgrade --py37-plus `find pydantic tests -name "*.py" -type f`
+
+.PHONY: pyright
+pyright:
+	cd tests/pyright && pyright
 
 .PHONY: test
 test:
-	pytest --cov=pydantic
+	coverage run -m pytest --durations=10
 
 .PHONY: testcov
 testcov: test
@@ -97,7 +89,6 @@ clean:
 	rm -rf build
 	rm -rf dist
 	rm -f pydantic/*.c pydantic/*.so
-	python setup.py clean
 	rm -rf site
 	rm -rf docs/_build
 	rm -rf docs/.changelog.md docs/.version.md docs/.tmp_schema_mappings.html
@@ -114,9 +105,3 @@ docs:
 docs-serve:
 	python docs/build/main.py
 	mkdocs serve
-
-.PHONY: publish-docs
-publish-docs:
-	zip -r site.zip site
-	@curl -H "Content-Type: application/zip" -H "Authorization: Bearer ${NETLIFY}" \
-	      --data-binary "@site.zip" https://api.netlify.com/api/v1/sites/pydantic-docs.netlify.com/deploys
